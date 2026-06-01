@@ -1,22 +1,40 @@
 using FishNet.Object;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    public float speed = 5f;
+    [SerializeField]
+    private float speed = 5f;
 
     private CharacterController controller;
+
+    private PlayerInputActions input;
+
+    private Vector2 moveInput;
 
     public override void OnStartClient()
     {
         base.OnStartClient();
 
-        controller = GetComponent<CharacterController>();
+        if (!IsOwner)
+            return;
 
-        Camera cam = GetComponentInChildren<Camera>();
+        input = new PlayerInputActions();
 
-        if (cam != null)
-            cam.gameObject.SetActive(IsOwner);
+        input.Player.Move.performed +=
+            ctx => moveInput = ctx.ReadValue<Vector2>();
+
+        input.Player.Move.canceled +=
+            ctx => moveInput = Vector2.zero;
+
+        input.Enable();
+    }
+
+    private void Awake()
+    {
+        controller =
+            GetComponent<CharacterController>();
     }
 
     private void Update()
@@ -24,16 +42,18 @@ public class PlayerController : NetworkBehaviour
         if (!IsOwner)
             return;
 
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
-
         Vector3 move =
-            transform.right * h +
-            transform.forward * v;
+            transform.right * moveInput.x +
+            transform.forward * moveInput.y;
 
         controller.Move(
             move *
             speed *
             Time.deltaTime);
+    }
+
+    private void OnDestroy()
+    {
+        input?.Dispose();
     }
 }

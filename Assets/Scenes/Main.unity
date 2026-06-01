@@ -800,6 +800,7 @@ GameObject:
   - component: {fileID: 1340258068}
   - component: {fileID: 1340258067}
   - component: {fileID: 1340258066}
+  - component: {fileID: 1340258075}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -979,6 +980,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1340258075
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1340258065}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Spawning.PlayerSpawner
+  _playerPrefab: {fileID: 3389683863587891912, guid: b1288bee8c8679541b3c8f77fde652b4, type: 3}
+  _addToDefaultScene: 1
+  Spawns: []
 --- !u!1 &1349700972
 GameObject:
   m_ObjectHideFlags: 0
