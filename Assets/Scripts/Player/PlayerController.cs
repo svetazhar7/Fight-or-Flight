@@ -4,14 +4,28 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviour
 {
-    [SerializeField]
-    private float speed = 5f;
+    [Header("Movement")]
+    public float moveSpeed = 5f;
+    public float jumpHeight = 2f;
+    public float gravity = -20f;
+
+    [Header("Look")]
+    public float mouseSensitivity = 150f;
+    public Transform cameraHolder;
 
     private CharacterController controller;
-
     private PlayerInputActions input;
 
     private Vector2 moveInput;
+    private Vector2 lookInput;
+
+    private Vector3 velocity;
+    private float xRotation;
+
+    private void Awake()
+    {
+        controller = GetComponent<CharacterController>();
+    }
 
     public override void OnStartClient()
     {
@@ -28,13 +42,24 @@ public class PlayerController : NetworkBehaviour
         input.Player.Move.canceled +=
             ctx => moveInput = Vector2.zero;
 
-        input.Enable();
-    }
+        input.Player.Look.performed +=
+            ctx => lookInput = ctx.ReadValue<Vector2>();
 
-    private void Awake()
-    {
-        controller =
-            GetComponent<CharacterController>();
+        input.Player.Look.canceled +=
+            ctx => lookInput = Vector2.zero;
+
+        input.Player.Jump.performed +=
+            ctx => Jump();
+
+        input.Enable();
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        Camera cam = GetComponentInChildren<Camera>();
+
+        if (cam != null)
+            cam.gameObject.SetActive(true);
     }
 
     private void Update()
@@ -42,14 +67,62 @@ public class PlayerController : NetworkBehaviour
         if (!IsOwner)
             return;
 
+        Move();
+        Look();
+    }
+
+    private void Move()
+    {
         Vector3 move =
             transform.right * moveInput.x +
             transform.forward * moveInput.y;
 
         controller.Move(
             move *
-            speed *
+            moveSpeed *
             Time.deltaTime);
+
+        if (controller.isGrounded &&
+            velocity.y < 0)
+        {
+            velocity.y = -2f;
+        }
+
+        velocity.y += gravity * Time.deltaTime;
+
+        controller.Move(
+            velocity *
+            Time.deltaTime);
+    }
+
+    private void Jump()
+    {
+        if (!controller.isGrounded)
+            return;
+
+        velocity.y =
+            Mathf.Sqrt(jumpHeight * -2f * gravity);
+    }
+
+    private void Look()
+    {
+        float mouseX =
+            lookInput.x *
+            mouseSensitivity *
+            Time.deltaTime;
+
+        float mouseY =
+            lookInput.y *
+            mouseSensitivity *
+            Time.deltaTime;
+
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+
+        cameraHolder.localRotation =
+            Quaternion.Euler(xRotation, 0f, 0f);
+
+        transform.Rotate(Vector3.up * mouseX);
     }
 
     private void OnDestroy()
