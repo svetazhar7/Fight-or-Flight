@@ -323,7 +323,11 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 231306054}
   _networkObjectCache: {fileID: 0}
-  speed: 5
+  moveSpeed: 5
+  jumpHeight: 2
+  gravity: -20
+  mouseSensitivity: 150
+  cameraHolder: {fileID: 0}
 --- !u!4 &231306056
 Transform:
   m_ObjectHideFlags: 0
@@ -788,7 +792,7 @@ Transform:
   m_GameObject: {fileID: 909612424}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 96.29275, y: 0, z: -123.05779}
+  m_LocalPosition: {x: 96.29275, y: 0.11, z: -123.05779}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

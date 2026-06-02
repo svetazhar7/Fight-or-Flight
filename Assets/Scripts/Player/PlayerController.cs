@@ -11,7 +11,9 @@ public class PlayerController : NetworkBehaviour
 
     [Header("Look")]
     public float mouseSensitivity = 150f;
-    public Transform cameraHolder;
+
+    [Header("References")]
+    public Transform headPivot;
 
     private CharacterController controller;
     private PlayerInputActions input;
@@ -20,7 +22,8 @@ public class PlayerController : NetworkBehaviour
     private Vector2 lookInput;
 
     private Vector3 velocity;
-    private float xRotation;
+
+    private float pitch;
 
     private void Awake()
     {
@@ -55,11 +58,6 @@ public class PlayerController : NetworkBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-
-        Camera cam = GetComponentInChildren<Camera>();
-
-        if (cam != null)
-            cam.gameObject.SetActive(true);
     }
 
     private void Update()
@@ -88,7 +86,9 @@ public class PlayerController : NetworkBehaviour
             velocity.y = -2f;
         }
 
-        velocity.y += gravity * Time.deltaTime;
+        velocity.y +=
+            gravity *
+            Time.deltaTime;
 
         controller.Move(
             velocity *
@@ -101,7 +101,10 @@ public class PlayerController : NetworkBehaviour
             return;
 
         velocity.y =
-            Mathf.Sqrt(jumpHeight * -2f * gravity);
+            Mathf.Sqrt(
+                jumpHeight *
+                -2f *
+                gravity);
     }
 
     private void Look()
@@ -116,13 +119,24 @@ public class PlayerController : NetworkBehaviour
             mouseSensitivity *
             Time.deltaTime;
 
-        xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+        // Поворот тела по горизонтали
+        transform.Rotate(
+            Vector3.up *
+            mouseX);
 
-        cameraHolder.localRotation =
-            Quaternion.Euler(xRotation, 0f, 0f);
+        // Поворот головы по вертикали
+        pitch -= mouseY;
 
-        transform.Rotate(Vector3.up * mouseX);
+        pitch = Mathf.Clamp(
+            pitch,
+            -80f,
+            80f);
+
+        headPivot.localRotation =
+            Quaternion.Euler(
+                pitch,
+                0f,
+                0f);
     }
 
     private void OnDestroy()
