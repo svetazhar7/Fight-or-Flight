@@ -24,12 +24,39 @@ public class PlayerController : NetworkBehaviour
     private Vector3 velocity;
 
     private float pitch;
+    private bool isPilot;
+    private Transform pilotViewPoint;
 
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
     }
 
+    public void EnterPilotSeat(
+    Transform seatPoint,
+    Transform viewPoint)
+{
+    isPilot = true;
+
+    pilotViewPoint = viewPoint;
+
+    controller.enabled = false;
+
+    transform.position =
+        seatPoint.position;
+
+    transform.rotation =
+        seatPoint.rotation;
+
+    controller.enabled = true;
+}
+
+public void ExitPilotSeat()
+{
+    isPilot = false;
+
+    pilotViewPoint = null;
+}
     public override void OnStartClient()
     {
         base.OnStartClient();
@@ -138,6 +165,7 @@ public class PlayerController : NetworkBehaviour
                 0f,
                 0f);
     }
+    
 
     private void OnDestroy()
     {
