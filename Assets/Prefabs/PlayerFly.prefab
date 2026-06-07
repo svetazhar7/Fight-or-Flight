@@ -181,7 +181,7 @@ MonoBehaviour:
   <AssetPathHash>k__BackingField: 10978239100177824421
   SceneId: 0
   SerializedTransformProperties:
-    Position: {x: 97.77116, y: -0, z: -121.57937}
+    Position: {x: 0, y: -0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 1, y: 1, z: 1}
     IsValid: 1
@@ -205,7 +205,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584212125224540840
+  _initializedTimestamp: -8584209403996043299
 --- !u!114 &4464028082648251435
 MonoBehaviour:
   m_ObjectHideFlags: 0
