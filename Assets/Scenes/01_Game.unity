@@ -15,11 +15,11 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  m_FogMode: 3
-  m_FogDensity: 0.01
-  m_LinearFogStart: 0
-  m_LinearFogEnd: 300
+  m_FogColor: {r: 0.72, g: 0.8, b: 0.87, a: 1}
+  m_FogMode: 1
+  m_FogDensity: 0.0003
+  m_LinearFogStart: 1200
+  m_LinearFogEnd: 5000
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
@@ -119,6 +119,59 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &126450064
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 126450066}
+  - component: {fileID: 126450065}
+  m_Layer: 0
+  m_Name: Environment
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &126450065
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 126450064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ad5fd1ddd65cfe499e1f3186fa76c39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnvironmentSettings
+  drawDistance: 20000
+  targetCamera: {fileID: 0}
+  fogEnabled: 0
+  fogColor: {r: 0.72, g: 0.8, b: 0.87, a: 1}
+  fogMode: 1
+  fogStartDistance: 1200
+  fogEndDistance: 5000
+  fogDensity: 0.0003
+  matchCameraBackground: 0
+--- !u!4 &126450066
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 126450064}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &231306053
 GameObject:
   m_ObjectHideFlags: 0
@@ -698,7 +751,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 20000
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -2284,6 +2337,197 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1248511934}
   m_CullTransparentMesh: 1
+--- !u!1 &1294876595
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1294876599}
+  - component: {fileID: 1294876598}
+  - component: {fileID: 1294876597}
+  - component: {fileID: 1294876596}
+  - component: {fileID: 1294876600}
+  m_Layer: 0
+  m_Name: BiomeGenerator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1294876596
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1294876595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de6c34d9451d97a4d847516928ab987f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BiomeScatterer
+  treePrefab: {fileID: 3587791758020051052, guid: 9aadec443bfed324c93fa3a23a433dd2, type: 3}
+  rockPrefab: {fileID: 8681322927167750882, guid: a86d4d93a5f301349b37f58509d81f0d, type: 3}
+  forestBiome: Forest
+  treeCount: 6000
+  treeScale: {x: 0.8, y: 1.4}
+  treeMaxSlope: 28
+  mountainBiome: Mountains
+  rockCount: 2500
+  rockScale: {x: 0.6, y: 2.2}
+  rockMaxSlope: 55
+  plainsBiome: Plains
+  grassEnabled: 1
+  grassDensity: 12
+  grassHealthy: {r: 0.45, g: 0.62, b: 0.27, a: 1}
+  grassDry: {r: 0.62, g: 0.6, b: 0.3, a: 1}
+  desertBiome: Desert
+  sandEnabled: 1
+  sandDensity: 9
+  sandColor: {r: 0.85, g: 0.76, b: 0.5, a: 1}
+  detailResolution: 1024
+  detailPerPatch: 32
+  detailDistance: 180
+  treeDistance: 5000
+--- !u!114 &1294876597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1294876595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78d0a0d486bd2094fae4ad34e4f17164, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BiomeGenerator
+  seed: 43
+  biomeMapResolution: 512
+  biomes:
+  - {fileID: 11400000, guid: c68a7d9a5f179f344bbdd7782a3f847b, type: 2}
+  - {fileID: 11400000, guid: 362509a8ba2fa694cbdfc2565c9d7a6e, type: 2}
+  - {fileID: 11400000, guid: c7c0d0c28dd488341922b2b02a6499eb, type: 2}
+  - {fileID: 11400000, guid: 5b4cb49f0d616ed448cfbeaf2e9d7217, type: 2}
+  - {fileID: 11400000, guid: 20e29a7263a1bde4b92db524c82cb9b9, type: 2}
+  - {fileID: 11400000, guid: 455b69f6b99d7ed459bc185593809e1a, type: 2}
+  - {fileID: 11400000, guid: 823276cf1c8b64441b96daa894fbcb90, type: 2}
+  biomeBlend: 0.12
+  generatedTerrain: {fileID: 0}
+--- !u!114 &1294876598
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1294876595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dd6c04aa505eb9408e8f999bc1d27de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TerrainGenerator
+  mapSizeKm: 20
+  terrainHeight: 2500
+  heightRedistribution: 2.5
+  heightmapResolution: 2049
+  colormapResolution: 1024
+  biomeHeightOctaves: 2
+  borderMountains: 1
+  borderWidthPercent: 0.08
+  borderPeakHeight: 1
+  heightNoise:
+    featureScale: 3.5
+    octaves: 2
+    persistence: 0.3
+    lacunarity: 2
+    offset: {x: 0, y: 0}
+  temperatureNoise:
+    featureScale: 1.5
+    octaves: 2
+    persistence: 0.5
+    lacunarity: 2
+    offset: {x: 1000, y: 1000}
+  humidityNoise:
+    featureScale: 2
+    octaves: 3
+    persistence: 0.5
+    lacunarity: 2
+    offset: {x: 2000, y: 500}
+  borderRoughness: 0.6
+--- !u!4 &1294876599
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1294876595}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1294876600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1294876595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _localReconcileCorrectionType: 2
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 65535
+  <SpawnableCollectionId>k__BackingField: 0
+  <AssetPathHash>k__BackingField: 0
+  SceneId: 4277660538
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
+  <IsNested>k__BackingField: 0
+  WasActiveDuringEdit: 1
+  WasActiveDuringEdit_Set1: 1
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  <PredictedOwner>k__BackingField: {fileID: 0}
+  NetworkBehaviours: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
+  _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &1340258065
 GameObject:
   m_ObjectHideFlags: 0
@@ -2927,7 +3171,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1444239301}
   serializedVersion: 5
-  m_Mass: 2500
+  m_Mass: 1000
   m_LinearDamping: 0.02
   m_AngularDamping: 0.5
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -3349,6 +3593,53 @@ Transform:
   m_Children:
   - {fileID: 1916363578}
   m_Father: {fileID: 875375428}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1674157025
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1674157027}
+  - component: {fileID: 1674157026}
+  m_Layer: 0
+  m_Name: BiomeDetector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1674157026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1674157025}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3dd5f0a29adf69498821b138e70c9e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BiomeDetector
+  playerTransform: {fileID: 0}
+  biomeGenerator: {fileID: 1294876597}
+  checkInterval: 0.5
+--- !u!4 &1674157027
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1674157025}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1681405998
 PrefabInstance:
@@ -4204,3 +4495,6 @@ SceneRoots:
   - {fileID: 909612425}
   - {fileID: 1444239299}
   - {fileID: 1056827539}
+  - {fileID: 1674157027}
+  - {fileID: 1294876599}
+  - {fileID: 126450066}
