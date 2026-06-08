@@ -34,6 +34,12 @@ namespace FightOrFlight.Aircraft
                  "Keep it ~1.2–1.5× the plane's weight (mass × 9.81).")]
         [SerializeField] private float _maxLift = 32000f;
 
+        [Tooltip("Extra climb force (N) blended in while the pilot holds nose-up ON THE GROUND " +
+                 "above Vr, so rotating the stick yanks the plane off the runway quickly instead " +
+                 "of waiting to reach full flying speed. Fades in with speed and stops the instant " +
+                 "the wheels leave the ground, so it can't balloon once airborne.")]
+        [SerializeField] private float _takeoffAssist = 28000f;
+
         [Tooltip("Drag (N) = this × speed². Sets the top speed together with engine thrust.")]
         [SerializeField] private float _dragPerSpeedSqr = 2f;
 
@@ -93,9 +99,21 @@ namespace FightOrFlight.Aircraft
             // 1) Lift — grows with airspeed², along the aircraft up, only while moving
             //    forward. Uses total airspeed (not the forward component) so raising the
             //    nose to rotate doesn't paradoxically shed lift. At COM => no torque.
+            // Natural aerodynamic lift, capped so high cruise speed can't balloon the plane.
             float lift = fwdSpeed > 0f
                 ? Mathf.Min(_liftPerSpeedSqr * speed * speed, _maxLift)
                 : 0f;
+
+            // Take-off rotation assist: while still rolling on the ground and the pilot pulls
+            // the nose up (only possible past Vr — see PlaneController.InterpretInput), add a
+            // strong extra climb force so the plane rotates and leaps off the runway quickly
+            // instead of waiting to reach full flying speed. Kept OUTSIDE the MaxLift cap so
+            // the cap can't prevent liftoff; it vanishes the instant the wheels leave the
+            // ground and therefore can never balloon the plane in flight.
+            if (grounded && c.Pitch > 0f && fwdSpeed > 1f)
+                lift += _takeoffAssist * c.Pitch
+                        * Mathf.Clamp01(fwdSpeed / Mathf.Max(0.01f, _controlRefSpeed));
+
             _body.AddForce(axes.Up * (lift * mod.LiftMultiplier));
 
             // 2) Drag — opposes velocity, quadratic. At COM => no torque.
@@ -112,11 +130,16 @@ namespace FightOrFlight.Aircraft
             if (IsStalling)
                 authority *= 0.4f;
 
-            // Pitch is negated so c.Pitch > 0 (W) raises the nose: a +torque about the
-            // starboard axis pitches the nose DOWN, which would be the inverted "yoke" feel.
+            // Pitch is negated so c.Pitch > 0 (W) raises the nose.
+            // While grounded, pitch torque is zeroed: rotating the nose up causes the
+            // tail to strike the runway and bounce (oscillation). Takeoff is handled
+            // purely via the lift/assist forces below — the plane rises diagonally from
+            // horizontal speed + vertical lift, with no body rotation on the ground.
+            // Full pitch control is restored the moment the wheels leave the ground.
+            float pitchScale = grounded ? 0f : 1f;
             Vector3 torque =
-                axes.Right * (-c.Pitch * _controlPower.x) +
-                axes.Up * (c.Yaw * _controlPower.y) +
+                axes.Right * (-c.Pitch * _controlPower.x * pitchScale) +
+                axes.Up    * ( c.Yaw   * _controlPower.y) +
                 axes.Forward * (-c.Roll * _controlPower.z);
             _body.AddTorque(torque * authority);
 

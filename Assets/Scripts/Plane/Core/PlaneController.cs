@@ -67,7 +67,22 @@ namespace FightOrFlight.Aircraft
         public PlaneControlMode Mode => _mode;
         public PlaneAxes Axes => _axes;
         public bool IsStalling => _flight != null && _flight.IsStalling;
+        public bool IsGrounded => _grounded;
         public float ForwardSpeed => _rb != null ? Vector3.Dot(_rb.linearVelocity, _axes.Forward) : 0f;
+        public float AirSpeed      => _flight != null ? _flight.AirSpeed : 0f;
+        public float Throttle      => _engine != null ? _engine.Throttle : 0f;
+        public float NormalizedRpm => _engine != null ? _engine.NormalizedRpm : 0f;
+
+        /// <summary>Vr — ground speed (m/s) above which the nose can be rotated for take-off.</summary>
+        public float RotationSpeed => _rotationSpeed;
+
+        /// <summary>
+        /// Horizontal ground speed (m/s) — used for the Vr check so that pitching the nose
+        /// up doesn't drop ForwardSpeed below Vr and kill the rotation mid-roll.
+        /// </summary>
+        public float GroundSpeed => _rb != null
+            ? Vector3.ProjectOnPlane(_rb.linearVelocity, Vector3.up).magnitude
+            : 0f;
 
         public float VisualPitch => IsOwner ? _lastControl.Pitch : _netPitch.Value;
         public float VisualRoll => IsOwner ? _lastControl.Roll : _netRoll.Value;
@@ -191,18 +206,24 @@ namespace FightOrFlight.Aircraft
 
             if (mode == PlaneControlMode.Ground)
             {
-                c.ThrottleDelta = d.Vertical;
+                // E = gas: throttle builds while held, drops quickly when released so the
+                // plane doesn't roll on its own. W = rotation only (above Vr), not throttle.
+                c.ThrottleDelta = d.ActionE ? 1f : -3f;
+                c.Boost = d.ActionE;  // boost on while the gas is floored
                 c.Steer = d.Horizontal;
                 c.Brake = d.ActionQ ? 1f : 0f;
-                c.Boost = d.ActionE;
-                c.Pitch = ForwardSpeed >= _rotationSpeed ? Mathf.Max(0f, d.Vertical) : 0f;
+                // Use HORIZONTAL ground speed for Vr: pitching the nose up tilts axes.Forward
+                // upward, which drops ForwardSpeed below Vr and kills rotation mid-roll.
+                c.Pitch = (GroundSpeed >= _rotationSpeed && d.Vertical > 0f) ? d.Vertical : 0f;
             }
             else
             {
                 c.Pitch = d.Vertical;
                 c.Roll = d.Horizontal;
                 c.Yaw = d.Horizontal * 0.5f;
-                c.ThrottleDelta = (d.ActionE ? 1f : 0f) - (d.ActionQ ? 1f : 0f);
+                // E = throttle up. Releasing E slowly drops throttle (not hold-steady),
+                // Q = fast cut. This matches ground-mode feel and avoids "stuck at 100%".
+                c.ThrottleDelta = d.ActionE ? 1f : (d.ActionQ ? -2f : -0.5f);
             }
 
             return c;

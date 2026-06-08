@@ -32,6 +32,7 @@ public class PlayerController : NetworkBehaviour
     private float pilotYaw;
 
     private bool isPilot;
+    private bool _thirdPerson;
 
     private PilotSeat currentSeat;
     private Camera playerCamera;
@@ -155,6 +156,42 @@ public class PlayerController : NetworkBehaviour
 
     private void LookPilot()
     {
+        // ` toggles between 1st-person cockpit and 3rd-person chase view.
+        if (Keyboard.current != null && Keyboard.current[Key.Backquote].wasPressedThisFrame)
+        {
+            _thirdPerson = !_thirdPerson;
+
+            // Notify the HUD so it can show the correct view-mode label.
+            currentSeat?.Plane?.GetComponent<FightOrFlight.Aircraft.PlaneControlHud>()
+                ?.SetThirdPerson(_thirdPerson);
+
+            if (!_thirdPerson && currentSeat != null && playerCamera != null)
+            {
+                // Return camera to the cockpit.
+                playerCamera.transform.SetParent(currentSeat.PilotViewPoint);
+                playerCamera.transform.localPosition = Vector3.zero;
+                playerCamera.transform.localRotation = Quaternion.identity;
+                pilotYaw = 0f;
+                pitch = 0f;
+            }
+        }
+
+        if (_thirdPerson && currentSeat?.Plane != null && playerCamera != null)
+        {
+            // Chase camera: smoothly follow behind and above using aircraft axes.
+            var axes = currentSeat.Plane.Axes;
+            Vector3 target = currentSeat.Plane.transform.position
+                             - axes.Forward * 10f
+                             + axes.Up * 3f;
+            playerCamera.transform.SetParent(null, true);
+            playerCamera.transform.position = Vector3.Lerp(
+                playerCamera.transform.position, target, Time.deltaTime * 6f);
+            playerCamera.transform.LookAt(
+                currentSeat.Plane.transform.position + axes.Up * 1f);
+            return;
+        }
+
+        // 1st-person cockpit: free-look with mouse.
         float mouseX = lookInput.x * mouseSensitivity * Time.deltaTime;
         float mouseY = lookInput.y * mouseSensitivity * Time.deltaTime;
 
@@ -218,6 +255,7 @@ public class PlayerController : NetworkBehaviour
         currentSeat = null;
         isPilot = false;
         pilotYaw = 0f;
+        _thirdPerson = false;
 
         input.Player.Move.Enable();
         input.Player.Jump.Enable();
