@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fcf474b0b59e53c4f91c78522da0e20a, type: 3}
-  m_Name: Snow
+  m_Name: Plains
   m_EditorClassIdentifier: Assembly-CSharp::BiomeData
-  biomeName: Snow
-  biomeColor: {r: 0.98, g: 0.99, b: 1, a: 1}
-  placement: 1
-  minHeight: 0.9
+  biomeName: Plains
+  biomeColor: {r: 0.5, g: 0.8, b: 0.4, a: 1}
+  placement: 0
+  minHeight: 0
   maxHeight: 1
-  minTemperature: 0
-  maxTemperature: 1
-  minHumidity: 0
-  maxHumidity: 1
+  minTemperature: 0.3
+  maxTemperature: 0.72
+  minHumidity: 0.3
+  maxHumidity: 0.72
   strength: 1

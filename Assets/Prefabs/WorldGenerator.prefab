@@ -1,0 +1,224 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &9108601470606315363
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4283816059543567183}
+  - component: {fileID: 5541437407112675614}
+  - component: {fileID: 7364061181289743978}
+  - component: {fileID: 5335000769598589185}
+  - component: {fileID: 7038680144290043781}
+  m_Layer: 0
+  m_Name: WorldGenerator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4283816059543567183
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5541437407112675614
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dd6c04aa505eb9408e8f999bc1d27de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TerrainGenerator
+  mapSizeKm: 20
+  terrainHeight: 2500
+  heightRedistribution: 4
+  heightmapResolution: 2049
+  colormapResolution: 1024
+  biomeHeightOctaves: 2
+  biomesPerMap: 3
+  regionCellsPerAxis: 4
+  regionWarp: 0.24
+  regionBorderBlend: 0.14
+  borderMountains: 1
+  borderWidthPercent: 0.08
+  borderPeakHeight: 1
+  heightNoise:
+    featureScale: 3.5
+    octaves: 5
+    persistence: 0.505
+    lacunarity: 2
+    offset: {x: 0, y: 0}
+  temperatureNoise:
+    featureScale: 0.2
+    octaves: 4
+    persistence: 0.5
+    lacunarity: 2
+    offset: {x: 1000, y: 1000}
+  humidityNoise:
+    featureScale: 1
+    octaves: 5
+    persistence: 0.5
+    lacunarity: 2
+    offset: {x: 2000, y: 500}
+  detailNoise:
+    featureScale: 28
+    octaves: 4
+    persistence: 0.5
+    lacunarity: 2.2
+    offset: {x: 0, y: 0}
+  lowlandRoughness: 0.003
+  highlandRoughness: 0.3
+  ruggednessCurve: 2.8
+  microRoughness: 0.0012
+  surfaceGrain: 0.22
+  grainScale: 0.25
+  water:
+    lakesEnabled: 0
+    lakeCount: 8
+    lakeRadius: 0.02
+    lakeDepth: 0.012
+    lakeMaxTerrain: 0.35
+    riversEnabled: 0
+    riverCount: 5
+    riverDepth: 0.01
+    riverWidth: 2
+    riverSourceMinHeight: 0.6
+    riverMeander: 0.6
+    riverMaxSteps: 4000
+    waterShallow: {r: 0.3, g: 0.55, b: 0.62, a: 1}
+    waterDeep: {r: 0.1, g: 0.32, b: 0.5, a: 1}
+  waterMeshResolution: 257
+  borderRoughness: 0.3
+--- !u!114 &7364061181289743978
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78d0a0d486bd2094fae4ad34e4f17164, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BiomeGenerator
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7038680144290043781}
+  _networkObjectCache: {fileID: 0}
+  seed: 52
+  randomizeSeedOnServer: 0
+  autoGenerateOffline: 0
+  biomeMapResolution: 1024
+  biomes:
+  - {fileID: 11400000, guid: 20e29a7263a1bde4b92db524c82cb9b9, type: 2}
+  - {fileID: 11400000, guid: c68a7d9a5f179f344bbdd7782a3f847b, type: 2}
+  - {fileID: 11400000, guid: 6fa7078306d3aa5488edd36982701ab7, type: 2}
+  - {fileID: 11400000, guid: 4c5e05210687c5c4cb722d95779d149e, type: 2}
+  - {fileID: 11400000, guid: 3e1209acde674c94ab7785f6880f998a, type: 2}
+  - {fileID: 11400000, guid: 5b4cb49f0d616ed448cfbeaf2e9d7217, type: 2}
+  - {fileID: 11400000, guid: 823276cf1c8b64441b96daa894fbcb90, type: 2}
+  biomeBlend: 0.14
+  generatedTerrain: {fileID: 0}
+--- !u!114 &5335000769598589185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de6c34d9451d97a4d847516928ab987f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BiomeScatterer
+  treePrefab: {fileID: 9212610740932435539, guid: 66fa5c0f2f3c23744983ff32a456f56e, type: 3}
+  rockPrefab: {fileID: 3200526905158657812, guid: f9d739a15c0394947b178436dc6e36db, type: 3}
+  grassPrefab: {fileID: 8866833926864997716, guid: 11992843f4bc4b747823249f2748365d, type: 3}
+  forestBiome: Forest
+  treeCount: 6000
+  treeScale: {x: 0.8, y: 1.4}
+  treeMaxSlope: 28
+  mountainBiome: Mountains
+  rockCount: 2500
+  rockScale: {x: 0.6, y: 2.2}
+  rockMaxSlope: 55
+  plainsBiome: Plains
+  grassCount: 4000
+  grassScale: {x: 0.7, y: 1.6}
+  grassMaxSlope: 35
+  attemptsMultiplier: 30
+  groundOffset: -0.2
+--- !u!114 &7038680144290043781
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _localReconcileCorrectionType: 2
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 65535
+  <SpawnableCollectionId>k__BackingField: 0
+  <AssetPathHash>k__BackingField: 9972137040647166049
+  SceneId: 0
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
+  <IsNested>k__BackingField: 0
+  WasActiveDuringEdit: 0
+  WasActiveDuringEdit_Set1: 1
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  <PredictedOwner>k__BackingField: {fileID: 0}
+  NetworkBehaviours: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
+  _defaultDespawnType: 0
+  _initializedTimestamp: 0

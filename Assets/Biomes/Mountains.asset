@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mountains
   m_EditorClassIdentifier: Assembly-CSharp::BiomeData
   biomeName: Mountains
-  biomeColor: {r: 0.55, g: 0.55, b: 0.55, a: 1}
+  biomeColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   placement: 1
   minHeight: 0.74
   maxHeight: 0.9

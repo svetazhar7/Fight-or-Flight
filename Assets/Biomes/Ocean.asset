@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Ocean
   m_EditorClassIdentifier: Assembly-CSharp::BiomeData
   biomeName: Ocean
-  biomeColor: {r: 0.05, g: 0.15, b: 0.55, a: 1}
+  biomeColor: {r: 0.03, g: 0.1, b: 0.4, a: 1}
   placement: 1
   minHeight: 0
   maxHeight: 0.04

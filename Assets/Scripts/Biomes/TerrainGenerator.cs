@@ -306,7 +306,9 @@ public class TerrainGenerator : MonoBehaviour
                     }
                 }
 
-                c.a = 1f;
+                // URP Terrain Lit reads smoothness from the base map's alpha. Keep it
+                // near 0 so the ground is matte/earthy instead of wet-looking plastic.
+                c.a = 0f;
                 pixels[z * res + x] = c;
             }
         }
