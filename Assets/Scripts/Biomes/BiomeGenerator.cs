@@ -32,7 +32,10 @@ public class BiomeGenerator : NetworkBehaviour
     [Range(0f, 0.6f)] public float biomeBlend = 0.14f;
 
     [HideInInspector] public BiomeMap biomeMap;
-    [HideInInspector] public Terrain generatedTerrain;
+
+    /// <summary>Generated world data (heightmap, colormap, biomes). The visual
+    /// terrain itself is streamed in chunks by WorldStreamingManager.</summary>
+    [HideInInspector] public WorldData worldData;
 
     // Server-authoritative world seed, synced to every client with the spawn so
     // all peers generate byte-for-byte the same terrain.
@@ -84,18 +87,23 @@ public class BiomeGenerator : NetworkBehaviour
     {
         _terrainGen = GetComponent<TerrainGenerator>();
 
-        if (generatedTerrain != null)
-        {
-            if (Application.isPlaying) Destroy(generatedTerrain.gameObject);
-            else DestroyImmediate(generatedTerrain.gameObject);
-        }
+        // 1) Deterministic data generation (identical on every peer).
+        worldData = _terrainGen.GenerateWorldData(worldSeed, biomes, biomeBlend, biomeMapResolution, out biomeMap);
 
-        generatedTerrain = _terrainGen.GenerateTerrain(worldSeed, biomes, biomeBlend, biomeMapResolution, out biomeMap);
-        generatedTerrain.transform.position = Vector3.zero;
+        // 2) Hand the data to the local-only chunk streaming system. Nothing
+        //    visual is networked: each peer streams around its own players.
+        // (FishNet QOL properties throw when the object isn't network-spawned,
+        //  e.g. offline scenes or editor generation - treat that as offline.)
+        bool isServer = false, isClient = false;
+        try { isServer = IsServerStarted; isClient = IsClientStarted; } catch { }
 
-        // Scatter trees / rocks / grass / sand per biome, if a scatterer is present.
+        var streaming = GetComponent<WorldStreamingManager>();
+        if (streaming == null) streaming = gameObject.AddComponent<WorldStreamingManager>();
+        streaming.Initialize(worldData, _terrainGen, isServer, isClient);
+
+        // 3) Scatter trees / rocks / grass per biome, if a scatterer is present.
         var scatterer = GetComponent<BiomeScatterer>();
-        if (scatterer != null)
-            scatterer.Scatter(generatedTerrain, biomeMap, worldSeed);
+        if (scatterer != null && streaming.WorldRoot != null)
+            scatterer.Scatter(worldData, streaming.WorldRoot.transform, worldSeed);
     }
 }

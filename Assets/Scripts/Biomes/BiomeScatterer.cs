@@ -48,36 +48,35 @@ public class BiomeScatterer : MonoBehaviour
 
     private const string ContainerName = "Scatter";
 
-    public void Scatter(Terrain terrain, BiomeMap map, int seed)
+    public void Scatter(WorldData world, Transform worldRoot, int seed)
     {
-        if (terrain == null || map == null) return;
-        TerrainData data = terrain.terrainData;
+        if (world == null || world.biomeMap == null || worldRoot == null) return;
 
-        // Fresh container under the terrain (destroyed with the terrain on regen).
-        Transform existing = terrain.transform.Find(ContainerName);
+        // Fresh container under the world root (destroyed with it on regen).
+        Transform existing = worldRoot.Find(ContainerName);
         if (existing != null)
         {
             if (Application.isPlaying) Destroy(existing.gameObject);
             else DestroyImmediate(existing.gameObject);
         }
         var container = new GameObject(ContainerName);
-        container.transform.SetParent(terrain.transform, false);
+        container.transform.SetParent(worldRoot, false);
 
         System.Random rng = new System.Random(seed * 7919 + 13);
 
-        Place(treePrefab, forestBiome, treeCount, treeScale, treeMaxSlope, terrain, data, map, rng, container.transform);
-        Place(rockPrefab, mountainBiome, rockCount, rockScale, rockMaxSlope, terrain, data, map, rng, container.transform);
-        Place(grassPrefab, plainsBiome, grassCount, grassScale, grassMaxSlope, terrain, data, map, rng, container.transform);
+        Place(treePrefab, forestBiome, treeCount, treeScale, treeMaxSlope, world, rng, container.transform);
+        Place(rockPrefab, mountainBiome, rockCount, rockScale, rockMaxSlope, world, rng, container.transform);
+        Place(grassPrefab, plainsBiome, grassCount, grassScale, grassMaxSlope, world, rng, container.transform);
     }
 
     private void Place(GameObject prefab, string biomeName, int count, Vector2 scale, float maxSlope,
-        Terrain terrain, TerrainData data, BiomeMap map, System.Random rng, Transform parent)
+        WorldData world, System.Random rng, Transform parent)
     {
         if (prefab == null || count <= 0) return;
 
+        BiomeMap map = world.biomeMap;
         int res = map.Resolution;
-        Vector3 tpos = terrain.transform.position;
-        Vector3 size = data.size;
+        Vector3 size = world.worldSize;
         int placed = 0, attempts = 0, maxAttempts = count * Mathf.Max(4, attemptsMultiplier);
 
         var typeParent = new GameObject(biomeName + "_" + prefab.name);
@@ -91,14 +90,14 @@ public class BiomeScatterer : MonoBehaviour
 
             int bx = Mathf.Clamp(Mathf.RoundToInt(u * (res - 1)), 0, res - 1);
             int bz = Mathf.Clamp(Mathf.RoundToInt(v * (res - 1)), 0, res - 1);
-            if (map.IsWater(bx, bz)) continue;                       // not in lakes/rivers
+            if (map.IsWater(bx, bz)) continue;                       // not underwater
             BiomeData b = map.GetDominantBiome(bx, bz);
             if (b == null || b.biomeName != biomeName) continue;     // only the matching biome
-            if (data.GetSteepness(u, v) > maxSlope) continue;        // not on cliffs
+            if (world.SampleSteepnessDeg(u, v) > maxSlope) continue; // not on cliffs
 
-            float wx = tpos.x + u * size.x;
-            float wz = tpos.z + v * size.z;
-            float wy = terrain.SampleHeight(new Vector3(wx, 0f, wz)) + tpos.y + groundOffset;
+            float wx = u * size.x;
+            float wz = v * size.z;
+            float wy = world.SampleHeight01(u, v) * size.y + groundOffset;
 
             GameObject go = InstantiatePrefab(prefab, typeParent.transform);
             go.transform.position = new Vector3(wx, wy, wz);

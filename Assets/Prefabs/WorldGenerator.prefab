@@ -13,6 +13,8 @@ GameObject:
   - component: {fileID: 7364061181289743978}
   - component: {fileID: 5335000769598589185}
   - component: {fileID: 7038680144290043781}
+  - component: {fileID: 2956359986404007005}
+  - component: {fileID: 6353164445477624772}
   m_Layer: 0
   m_Name: WorldGenerator
   m_TagString: Untagged
@@ -47,6 +49,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4dd6c04aa505eb9408e8f999bc1d27de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TerrainGenerator
+  terrainShape: 0
+  rectangleAspect: 1.7
   mapSizeKm: 20
   terrainHeight: 2500
   heightRedistribution: 4
@@ -91,22 +95,15 @@ MonoBehaviour:
   surfaceGrain: 0.22
   grainScale: 0.25
   water:
-    lakesEnabled: 0
-    lakeCount: 8
-    lakeRadius: 0.02
-    lakeDepth: 0.012
-    lakeMaxTerrain: 0.35
-    riversEnabled: 0
-    riverCount: 5
-    riverDepth: 0.01
-    riverWidth: 2
-    riverSourceMinHeight: 0.6
-    riverMeander: 0.6
-    riverMaxSteps: 4000
+    oceansEnabled: 1
+    seaLevel: 0.09
     waterShallow: {r: 0.3, g: 0.55, b: 0.62, a: 1}
     waterDeep: {r: 0.1, g: 0.32, b: 0.5, a: 1}
-  waterMeshResolution: 257
+    material: {fileID: 2100000, guid: 9fd546a3ad5567842bd64e0c117fe6ae, type: 2}
+  oceanSubdivisions: 64
   borderRoughness: 0.3
+  oceanMinRegionFraction: 0.004
+  oceanScanResolution: 257
 --- !u!114 &7364061181289743978
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -135,7 +132,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5b4cb49f0d616ed448cfbeaf2e9d7217, type: 2}
   - {fileID: 11400000, guid: 823276cf1c8b64441b96daa894fbcb90, type: 2}
   biomeBlend: 0.14
-  generatedTerrain: {fileID: 0}
 --- !u!114 &5335000769598589185
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -222,3 +218,115 @@ MonoBehaviour:
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   _initializedTimestamp: 0
+--- !u!114 &2956359986404007005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1ddf502d8891cab4bb6dbd6fe0b23cb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WorldStreamingManager
+  chunkSize: 1250
+  loadRadius: 3
+  unloadRadius: 5
+  preloadRadius: 1
+  maxLoadedChunks: 180
+  altitudeRadiusCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 300
+      value: 1.3
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 800
+      value: 1.8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1500
+      value: 2.4
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 3000
+      value: 3.2
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  maxRadiusMultiplier: 3.5
+  updateInterval: 0.25
+  chunksPerFrame: 2
+  generationBudgetMs: 4
+  maxConcurrentJobs: 3
+  bootstrapSynchronously: 1
+  enableChunkPooling: 1
+  chunkPoolSize: 48
+  colliderRadius: 2
+  remotePlayerRadius: 2
+  tracker:
+    overrideTarget: {fileID: 0}
+    rescanInterval: 2
+  lod:
+    bands:
+    - maxDistance: 2600
+      pixelError: 6
+      heightmapMaxLod: 0
+      castShadows: 1
+    - maxDistance: 6500
+      pixelError: 30
+      heightmapMaxLod: 1
+      castShadows: 0
+    - maxDistance: 999999
+      pixelError: 90
+      heightmapMaxLod: 2
+      castShadows: 0
+  quality:
+    minCameraFarClip: 30000
+    farMeshResolution: 129
+    farMeshSinkMeters: 4
+  enableDebugVisualization: 1
+--- !u!114 &6353164445477624772
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9108601470606315363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 43d938198076cd74e8dd6ab98221c2bc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StreamingDebugger

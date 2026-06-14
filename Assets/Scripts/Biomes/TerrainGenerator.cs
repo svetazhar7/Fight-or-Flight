@@ -3,8 +3,30 @@ using UnityEngine;
 
 [System.Serializable] public class NoiseSettings { [Tooltip("How many noise features span the whole map. Lower = larger, smoother regions.")] public float featureScale = 3f; [Range(1, 8)] public int octaves = 4; [Range(0f, 1f)] public float persistence = 0.5f; public float lacunarity = 2f; public Vector2 offset; }
 
+/// <summary>Shape of the playable landmass, defined by where the border mountains ring it.</summary>
+public enum TerrainShape { Square, Rectangle, Circle }
+
 public class TerrainGenerator : MonoBehaviour
 {
+    [Header("Map Shape")]
+    [Tooltip("Shape of the playable area inside the border mountains: Square (default), Rectangle (wide), or Circle (round island/sea ringed by mountains; corners become mountain).")]
+    public TerrainShape terrainShape = TerrainShape.Square;
+
+    [Tooltip("Rectangle only: width-to-height ratio of the playable area (>1 = wider than tall).")]
+    [Range(1f, 3f)] public float rectangleAspect = 1.7f;
+
+    [Tooltip("Circle/Rectangle: width of the coastline band (normalized map units) over which land slopes down into the surrounding ocean.")]
+    [Range(0.01f, 0.2f)] public float coastWidth = 0.06f;
+
+    [Tooltip("Circle/Rectangle: how far below the waterline the carved sea floor outside the land sits (normalized height). Bigger = deeper offshore water.")]
+    [Range(0.01f, 0.3f)] public float seaFloorDrop = 0.06f;
+
+    [Tooltip("Circle/Rectangle: how much the interior is lifted into dry land so the shape reads as a solid island (0 = no lift, just a footprint; higher = pronounced landmass above the sea).")]
+    [Range(0f, 0.6f)] public float islandUplift = 0.28f;
+
+    [Tooltip("Circle/Rectangle: distance inland (normalized) over which the interior rises from the coast to its full island height.")]
+    [Range(0.02f, 0.4f)] public float islandCoreWidth = 0.16f;
+
     [Header("Map Size")][Tooltip("Physical map size in kilometers (square). Bigger map = larger, smoother biomes.")] public float mapSizeKm = 20f;
 
     [Tooltip("Maximum terrain height in meters.")]
@@ -77,29 +99,20 @@ public class TerrainGenerator : MonoBehaviour
     [Tooltip("Frequency of the surface grain in colormap pixels. Higher = finer speckle.")]
     [Range(0.02f, 1f)] public float grainScale = 0.25f;
 
-    [Header("Water (lakes & rivers)")]
+    [Header("Water (ocean)")]
     public TerrainWaterBuilder.Settings water = new TerrainWaterBuilder.Settings
     {
-        lakesEnabled = true,
-        lakeCount = 8,
-        lakeRadius = 0.02f,
-        lakeDepth = 0.012f,
-        lakeMaxTerrain = 0.35f,
-
-        riversEnabled = true,
-        riverCount = 5,
-        riverDepth = 0.01f,
-        riverWidth = 2,
-        riverSourceMinHeight = 0.6f,
-        riverMeander = 0.6f,
-        riverMaxSteps = 4000,
+        // Ocean: flat sea plane at sea level; the depth-based toon water shader
+        // floods every lowland below it.
+        oceansEnabled = true,
+        seaLevel = 0.12f,
 
         waterShallow = new Color(0.30f, 0.55f, 0.62f),
         waterDeep = new Color(0.10f, 0.32f, 0.50f)
     };
 
-    [Tooltip("Resolution of the generated water surface mesh (kept coarse for performance).")]
-    [Range(32, 512)] public int waterMeshResolution = 257;
+    [Tooltip("Subdivisions per axis of the flat ocean plane (kept low; it's a flat sheet driven by the depth shader).")]
+    [Range(1, 200)] public int oceanSubdivisions = 64;
 
     [Tooltip("How irregular the border mountains are (0 = straight wall, 1 = very meandering/natural).")]
     [Range(0f, 1f)] public float borderRoughness = 0.6f;
@@ -109,14 +122,16 @@ public class TerrainGenerator : MonoBehaviour
 
     public float TerrainSizeMeters => Mathf.Max(1f, mapSizeKm) * 1000f;
 
-    public Terrain GenerateTerrain(int seed, BiomeData[] biomes, float biomeBlend, int biomeMapResolution, out BiomeMap biomeMap)
+    /// <summary>
+    /// Generates the world as pure data (heightmap + colormap + biome map) with
+    /// no Unity Terrain objects. The chunk streaming system builds the visual
+    /// terrain from windows of this data on each client independently.
+    /// Deterministic from the seed, so all networked peers produce identical data.
+    /// </summary>
+    public WorldData GenerateWorldData(int seed, BiomeData[] biomes, float biomeBlend, int biomeMapResolution, out BiomeMap biomeMap)
     {
         float sizeMeters = TerrainSizeMeters;
         int res = SnapHeightmapResolution(heightmapResolution);
-
-        TerrainData data = new TerrainData();
-        data.heightmapResolution = res;
-        data.size = new Vector3(sizeMeters, terrainHeight, sizeMeters);
 
         // Seeded, repeatable per-channel offsets.
         System.Random rng = new System.Random(seed);
@@ -145,10 +160,7 @@ public class TerrainGenerator : MonoBehaviour
         biomeMap = new BiomeMap(biomeMapResolution, biomes, biomeBlend, regions);
 
         // 1) Build the heightmap at full resolution with height-dependent ruggedness.
-        //    'flow' keeps the smooth base shape (no fine detail) so rivers can find
-        //    a consistent downhill path without snagging on noise pits.
         float[,] heights = new float[res, res];
-        float[,] flow = new float[res, res];
         for (int z = 0; z < res; z++)
         {
             float nz = (float)z / (res - 1);
@@ -158,19 +170,19 @@ public class TerrainGenerator : MonoBehaviour
 
                 // Power curve: broad flat lowlands, mountains stay as rare large landforms.
                 float baseH = Mathf.Pow(SampleNoise(nx, nz, heightNoise, heightOff), heightRedistribution);
-                baseH = ApplyBorder(baseH, nx, nz);
-                flow[z, x] = baseH;
+                baseH = ApplyShape(baseH, nx, nz);
 
                 heights[z, x] = Mathf.Clamp01(ApplyRuggedness(baseH, nx, nz, detailOff));
             }
         }
 
-        // 2) Carve lakes and rivers, then commit the heights.
-        TerrainWaterBuilder.Result waterResult =
-            TerrainWaterBuilder.Carve(heights, flow, res, water, new System.Random(seed * 101 + 5));
-        data.SetHeights(0, 0, heights);
+        // 1b) Ocean: fill isolated below-sea-level pockets up above the waterline
+        //     so the flat sea plane only shows the main connected ocean(s) - no
+        //     stray water sitting in little basins up on the mountainsides.
+        if (water.oceansEnabled)
+            FillIsolatedBasins(heights, res, water.seaLevel);
 
-        // 3) Build the biome map at its own (low) resolution.
+        // 2) Build the biome map at its own (low) resolution.
         int bres = biomeMap.Resolution;
 
         // Pass 1: raw classification height per cell, smoothed (low-octave) so
@@ -183,7 +195,7 @@ public class TerrainGenerator : MonoBehaviour
             {
                 float nx = (float)x / (bres - 1);
                 float h = Mathf.Pow(SampleNoise(nx, nz, heightNoise, heightOff, biomeHeightOctaves), heightRedistribution);
-                rawH[z * bres + x] = ApplyBorder(h, nx, nz);
+                rawH[z * bres + x] = ApplyShape(h, nx, nz);
             }
         }
 
@@ -205,23 +217,31 @@ public class TerrainGenerator : MonoBehaviour
                 float hum = sampleHum(nx, nz);
                 biomeMap.SetPoint(x, z, nx, nz, hp, t, hum);
 
-                // Flag water at biome-map granularity so scatter can skip it.
-                int hx = Mathf.Clamp(Mathf.RoundToInt(nx * (res - 1)), 0, res - 1);
-                int hz = Mathf.Clamp(Mathf.RoundToInt(nz * (res - 1)), 0, res - 1);
-                if (waterResult.surface[hz, hx] > TerrainWaterBuilder.Result.NoWater + 0.5f)
-                    biomeMap.SetWater(x, z, true);
+                // The Ocean biome IS the water: any cell whose actual terrain is
+                // below the waterline becomes Ocean (blue, flagged water), so the
+                // biome map and the water mesh always describe the same sea.
+                if (water.oceansEnabled)
+                {
+                    int hx = Mathf.Clamp(Mathf.RoundToInt(nx * (res - 1)), 0, res - 1);
+                    int hz = Mathf.Clamp(Mathf.RoundToInt(nz * (res - 1)), 0, res - 1);
+                    if (heights[hz, hx] < water.seaLevel)
+                        biomeMap.SetOcean(x, z);
+                }
             }
         }
 
-        ApplySplatmap(data, biomeMap, sizeMeters, heights, waterResult, res);
+        // 3) Bake the biome colormap texture (shared by all chunks and the far mesh).
+        Texture2D colorTex = BuildColormap(biomeMap);
 
-        GameObject terrainObj = Terrain.CreateTerrainGameObject(data);
-        terrainObj.name = "GeneratedTerrain";
-
-        // 4) Build the water surface mesh as a child of the terrain.
-        TerrainWaterBuilder.BuildWaterMesh(waterResult, res, data.size, water, waterMeshResolution, terrainObj.transform);
-
-        return terrainObj.GetComponent<Terrain>();
+        return new WorldData
+        {
+            seed = seed,
+            heights = heights,
+            heightRes = res,
+            worldSize = new Vector3(sizeMeters, terrainHeight, sizeMeters),
+            colormap = colorTex,
+            biomeMap = biomeMap,
+        };
     }
 
     // Adds detail noise whose amplitude grows with elevation: smooth plains,
@@ -242,39 +262,18 @@ public class TerrainGenerator : MonoBehaviour
         return baseH + detail * amp + micro;
     }
 
-    private void ApplySplatmap(TerrainData data, BiomeMap biomeMap, float sizeMeters,
-        float[,] heights, TerrainWaterBuilder.Result water, int heightRes)
+    /// <summary>
+    /// Bakes the biome colors (plus earthy grain) into one global texture.
+    /// Streamed chunks each show their own window of it via terrain layer tile
+    /// offsets; the far horizon mesh uses it directly. Underwater terrain is left
+    /// untinted - the ocean's depth-based toon water shader colours it.
+    /// </summary>
+    private Texture2D BuildColormap(BiomeMap biomeMap)
     {
         int res = Mathf.Clamp(Mathf.ClosestPowerOfTwo(colormapResolution), 256, 2048);
-        data.alphamapResolution = res;
-
-        TerrainLayer layer = new TerrainLayer();
-        layer.diffuseTexture = Texture2D.whiteTexture;
-        layer.tileSize = new Vector2(sizeMeters, sizeMeters);
-        // Fully matte terrain: kill the specular sheen / glossy highlights so the
-        // ground reads as rough and earthy rather than wet plastic.
-        layer.smoothness = 0f;
-        layer.metallic = 0f;
-        layer.specular = Color.black;
-        data.terrainLayers = new TerrainLayer[] { layer };
-
-        float[,,] alphas = new float[res, res, 1];
-        for (int z = 0; z < res; z++)
-            for (int x = 0; x < res; x++)
-                alphas[z, x, 0] = 1f;
-
-        data.SetAlphamaps(0, 0, alphas);
-        ApplyColormap(data, biomeMap, res, heights, water, heightRes);
-    }
-
-    private void ApplyColormap(TerrainData data, BiomeMap biomeMap, int res,
-        float[,] heights, TerrainWaterBuilder.Result water, int heightRes)
-    {
         Texture2D colorTex = new Texture2D(res, res, TextureFormat.RGBA32, false);
         colorTex.filterMode = FilterMode.Bilinear;
         colorTex.wrapMode = TextureWrapMode.Clamp;
-
-        float waterDepthRef = Mathf.Max(0.001f, Mathf.Max(this.water.lakeDepth, this.water.riverDepth));
 
         Color[] pixels = new Color[res * res];
         for (int z = 0; z < res; z++)
@@ -291,21 +290,6 @@ public class TerrainGenerator : MonoBehaviour
                 float factor = Mathf.Clamp(1f + g * surfaceGrain, 0.6f, 1.35f);
                 c.r *= factor; c.g *= factor; c.b *= factor;
 
-                // Water tint from the carved lake/river field.
-                if (water != null && water.surface != null)
-                {
-                    int hx = Mathf.Clamp(Mathf.RoundToInt((float)x / (res - 1) * (heightRes - 1)), 0, heightRes - 1);
-                    int hz = Mathf.Clamp(Mathf.RoundToInt((float)z / (res - 1) * (heightRes - 1)), 0, heightRes - 1);
-                    float surf = water.surface[hz, hx];
-                    if (surf > TerrainWaterBuilder.Result.NoWater + 0.5f)
-                    {
-                        float bed = heights[hz, hx];
-                        float depth = Mathf.Clamp01((surf - bed) / waterDepthRef);
-                        Color wcol = Color.Lerp(this.water.waterShallow, this.water.waterDeep, depth);
-                        c = Color.Lerp(c, wcol, Mathf.Lerp(0.55f, 0.95f, depth));
-                    }
-                }
-
                 // URP Terrain Lit reads smoothness from the base map's alpha. Keep it
                 // near 0 so the ground is matte/earthy instead of wet-looking plastic.
                 c.a = 0f;
@@ -315,22 +299,81 @@ public class TerrainGenerator : MonoBehaviour
 
         colorTex.SetPixels(pixels);
         colorTex.Apply();
+        return colorTex;
+    }
 
-        TerrainLayer[] layers = data.terrainLayers;
-        if (layers.Length > 0)
+    // Distance (0..0.5) from a point to the edge of the playable area for the
+    // selected map shape. 0 at the boundary, grows inward; negative outside the
+    // shape (e.g. the corners of a Circle) so those become full mountain wall.
+    private float ShapeInset(float nx, float nz)
+    {
+        switch (terrainShape)
         {
-            layers[0].diffuseTexture = colorTex;
-            data.terrainLayers = layers;
+            case TerrainShape.Circle:
+            {
+                // Round island/sea: inset = how far inside the inscribed circle.
+                float dx = nx - 0.5f, dz = nz - 0.5f;
+                float r = Mathf.Sqrt(dx * dx + dz * dz); // 0 centre .. ~0.707 corners
+                return 0.5f - r;                         // 0.5 centre, 0 at radius .5, <0 in corners
+            }
+            case TerrainShape.Rectangle:
+            {
+                // Squeeze one axis so the flat area is wider than it is tall.
+                float a = Mathf.Max(1f, rectangleAspect);
+                float ex = Mathf.Min(nx, 1f - nx);
+                float ez = Mathf.Min(nz, 1f - nz) * a;
+                return Mathf.Min(ex, ez);
+            }
+            default: // Square
+                return Mathf.Min(Mathf.Min(nx, 1f - nx), Mathf.Min(nz, 1f - nz));
         }
     }
 
+    // Shapes the world boundary according to terrainShape:
+    //  - Square: optional border-mountain ring (the classic walled, bounded map).
+    //  - Circle / Rectangle: the land is an actual disc/rectangle and everything
+    //    outside it sinks below the waterline into open ocean - a real shaped
+    //    island, no invisible wall.
+    private float ApplyShape(float h, float nx, float nz)
+    {
+        switch (terrainShape)
+        {
+            case TerrainShape.Circle:
+            case TerrainShape.Rectangle:
+                return ApplyOceanCoast(h, nx, nz);
+            default:
+                return ApplyBorderRidge(h, nx, nz);
+        }
+    }
+
+    // Outside the shape's footprint the terrain drops to a sea floor below the
+    // waterline, so the land really is shaped (round/rectangular) and is ringed
+    // by ocean instead of a mountain wall. A coastline band gives a natural beach.
+    private float ApplyOceanCoast(float h, float nx, float nz)
+    {
+        float inset = ShapeInset(nx, nz);           // >0 inside footprint, <0 outside
+        float coast = Mathf.Max(0.005f, coastWidth);
+
+        // Lift the interior into dry land so the footprint reads as an island:
+        // 0 at the coast, ramping to the full island height further inland.
+        float landT = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(coast, coast + islandCoreWidth, inset));
+        float landH = Mathf.Clamp01(h + islandUplift * landT);
+
+        if (inset >= coast) return landH;           // solidly inland
+
+        // Coastline band: blend the (lifted) land down to the offshore sea floor.
+        float seaFloor = Mathf.Max(0f, water.seaLevel - seaFloorDrop);
+        float t = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(coast, -coast, inset));
+        return Mathf.Lerp(landH, seaFloor, t);
+    }
+
     // Raises height toward borderPeakHeight near the map edges, forming a tall
-    // boundary ridge. edgeDist is 0 at the very edge and 0.5 at the map center.
-    private float ApplyBorder(float h, float nx, float nz)
+    // boundary ridge. edgeDist is 0 at the boundary and grows inward (shape-aware).
+    private float ApplyBorderRidge(float h, float nx, float nz)
     {
         if (!borderMountains) return h;
 
-        float edgeDist = Mathf.Min(Mathf.Min(nx, 1f - nx), Mathf.Min(nz, 1f - nz));
+        float edgeDist = ShapeInset(nx, nz);
         float width = Mathf.Clamp(borderWidthPercent, 0.001f, 0.5f);
 
         // Meander the band width along the rim so the inner edge is irregular
@@ -354,6 +397,79 @@ public class TerrainGenerator : MonoBehaviour
 
         float raised = Mathf.Lerp(h, peak, t) + rough;
         return Mathf.Clamp01(raised);
+    }
+
+    [Header("Ocean cleanup")]
+    [Tooltip("Below-sea water regions smaller than this fraction of the map are treated as stray pockets and filled in (raised above sea level) so only real, large oceans/seas show water. 0 = keep every pocket.")]
+    [Range(0f, 0.05f)] public float oceanMinRegionFraction = 0.004f;
+
+    [Tooltip("Resolution of the connectivity scan that decides what counts as a real ocean vs a stray pocket. Coarse is fine and fast.")]
+    [Range(64, 513)] public int oceanScanResolution = 257;
+
+    // Flood-fills the below-sea-level cells, keeps only connected regions large
+    // enough to be real oceans/seas, and raises every other (isolated) pocket
+    // just above the waterline. The flat ocean plane then renders water solely
+    // over the big connected bodies - no lakes perched in mountain basins.
+    private void FillIsolatedBasins(float[,] heights, int res, float seaLevel)
+    {
+        int gr = Mathf.Clamp(oceanScanResolution, 64, res);
+        var below = new bool[gr, gr];
+        for (int z = 0; z < gr; z++)
+            for (int x = 0; x < gr; x++)
+            {
+                int hz = z * (res - 1) / (gr - 1);
+                int hx = x * (res - 1) / (gr - 1);
+                below[z, x] = heights[hz, hx] < seaLevel;
+            }
+
+        // Label 4-connected components and measure their sizes.
+        var label = new int[gr, gr];
+        var sizes = new List<int>();
+        var stack = new Stack<int>();
+        int comp = 0;
+        for (int z0 = 0; z0 < gr; z0++)
+            for (int x0 = 0; x0 < gr; x0++)
+            {
+                if (!below[z0, x0] || label[z0, x0] != 0) continue;
+                comp++;
+                int size = 0;
+                stack.Push(z0 * gr + x0);
+                label[z0, x0] = comp;
+                while (stack.Count > 0)
+                {
+                    int idx = stack.Pop();
+                    int cz = idx / gr, cx = idx % gr;
+                    size++;
+                    PushIf(below, label, stack, gr, cz + 1, cx, comp);
+                    PushIf(below, label, stack, gr, cz - 1, cx, comp);
+                    PushIf(below, label, stack, gr, cz, cx + 1, comp);
+                    PushIf(below, label, stack, gr, cz, cx - 1, comp);
+                }
+                sizes.Add(size);
+            }
+
+        if (comp == 0) return;
+        int minCells = Mathf.Max(1, Mathf.RoundToInt(oceanMinRegionFraction * gr * gr));
+
+        // Raise every full-res below-sea cell whose region is too small to keep.
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++)
+            {
+                if (heights[z, x] >= seaLevel) continue;
+                int cz = z * (gr - 1) / (res - 1);
+                int cx = x * (gr - 1) / (res - 1);
+                int c = label[cz, cx];
+                if (c == 0 || sizes[c - 1] < minCells)
+                    heights[z, x] = seaLevel + 0.0015f; // tuck just above the waterline
+            }
+    }
+
+    private static void PushIf(bool[,] below, int[,] label, Stack<int> stack, int gr, int z, int x, int comp)
+    {
+        if (z < 0 || z >= gr || x < 0 || x >= gr) return;
+        if (!below[z, x] || label[z, x] != 0) return;
+        label[z, x] = comp;
+        stack.Push(z * gr + x);
     }
 
     // Maps a height to its 0..1 rank within the sorted set of all classification

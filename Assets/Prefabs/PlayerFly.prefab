@@ -221,10 +221,14 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 3389683863587891912}
   _networkObjectCache: {fileID: 3389683863587891912}
-  moveSpeed: 5
+  moveSpeed: 500
   jumpHeight: 2
   gravity: -20
-  mouseSensitivity: 100
+  mouseSensitivity: 35
+  interactRange: 3
+  interactMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
   headPivot: {fileID: 2729331289579314132}
 --- !u!114 &5650953068858760610
 MonoBehaviour:
@@ -386,7 +390,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 10000
   field of view: 60
   orthographic: 0
   orthographic size: 5

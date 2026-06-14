@@ -29,15 +29,11 @@ public class BiomeDetector : MonoBehaviour
         if (playerTransform == null || biomeGenerator == null || biomeGenerator.biomeMap == null)
             return;
 
-        Terrain terrain = biomeGenerator.generatedTerrain;
-        if (terrain == null) return;
+        WorldData world = biomeGenerator.worldData;
+        if (world == null) return;
 
-        TerrainData tData = terrain.terrainData;
-        Vector3 terrainPos = terrain.transform.position;
-        Vector3 size = tData.size;
-
-        float nx = Mathf.Clamp01((playerTransform.position.x - terrainPos.x) / size.x);
-        float nz = Mathf.Clamp01((playerTransform.position.z - terrainPos.z) / size.z);
+        float nx = Mathf.Clamp01(playerTransform.position.x / world.worldSize.x);
+        float nz = Mathf.Clamp01(playerTransform.position.z / world.worldSize.z);
 
         int res = biomeGenerator.biomeMap.Resolution;
         int bx = Mathf.Clamp(Mathf.RoundToInt(nx * (res - 1)), 0, res - 1);

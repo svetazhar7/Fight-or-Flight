@@ -25,10 +25,12 @@ public class BiomeMap
     private BiomeRegions _regions;
     private BiomeData[] _climate;     // active climate biomes (from the regions)
     private BiomeData[] _elevation;   // height-placed biomes
+    private BiomeData _oceanBiome;    // the Ocean biome - placed by the waterline, not by percentile
     private float[] _regionWeights;   // scratch buffer reused per point
 
     public int Resolution => _resolution;
     public BiomeRegions Regions => _regions;
+    public BiomeData OceanBiome => _oceanBiome;
 
     public BiomeMap(int resolution, BiomeData[] biomes, float blend, BiomeRegions regions)
     {
@@ -39,11 +41,17 @@ public class BiomeMap
 
         _climate = regions != null ? regions.ActiveBiomes : new BiomeData[0];
 
+        // Elevation biomes classify by terrain-height percentile - EXCEPT Ocean,
+        // which is placed wherever terrain sits below the waterline (see SetOcean)
+        // so "the Ocean biome" and "where there is water" are one and the same.
         var elev = new List<BiomeData>();
         if (biomes != null)
             foreach (var b in biomes)
-                if (b != null && b.placement == BiomePlacement.Elevation)
-                    elev.Add(b);
+            {
+                if (b == null || b.placement != BiomePlacement.Elevation) continue;
+                if (b.biomeName == "Ocean") { _oceanBiome = b; continue; }
+                elev.Add(b);
+            }
         _elevation = elev.ToArray();
 
         _regionWeights = new float[_climate.Length];
@@ -105,6 +113,21 @@ public class BiomeMap
     }
 
     public void SetWater(int x, int z, bool isWater) => _map[x, z].isWater = isWater;
+
+    /// <summary>
+    /// Marks a cell as the Ocean biome (terrain is below the waterline). This is
+    /// the single source of truth for "where is the sea": it sets the dominant
+    /// biome and colour to Ocean and flags the cell as water, so the water mesh
+    /// and the biome map always agree.
+    /// </summary>
+    public void SetOcean(int x, int z)
+    {
+        _map[x, z].isWater = true;
+        if (_oceanBiome == null) return;
+        _map[x, z].dominantBiome = _oceanBiome;
+        Color c = _oceanBiome.biomeColor; c.a = 1f;
+        _map[x, z].color = c;
+    }
 
     public BiomePoint GetPoint(int x, int z) => _map[x, z];
 
