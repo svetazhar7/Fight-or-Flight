@@ -21,16 +21,39 @@ namespace IslandSystem
 
         // ---- Heightmap ----------------------------------------------------
 
-        /// <summary>Normalized (0..1) multi-octave Perlin sample, optionally ridged.</summary>
-        public static float SampleHeight(int x, int y, int size, NoiseSettings n, float seedOffset, bool ridged)
+        /// <summary>Per-island randomized shape controls: coastline irregularity, elongation, placement.</summary>
+        struct ShapeParams
+        {
+            public float seedOffset;
+            public Vector2 center;        // small offset of the island within its tile
+            public float rot;             // elongation orientation
+            public float scaleX, scaleY;  // axis scales >= 1 (shrink only, so the island always fits the tile)
+            public float coastWarp;       // strength of coastline distortion
+        }
+
+        static ShapeParams MakeShapeParams(System.Random rng)
+        {
+            float e = Mathf.Lerp(1f, 1.5f, (float)rng.NextDouble());
+            bool stretchX = rng.NextDouble() < 0.5;
+            return new ShapeParams
+            {
+                seedOffset = (float)(rng.NextDouble() * 10000.0),
+                center = new Vector2((float)(rng.NextDouble() - 0.5) * 0.08f, (float)(rng.NextDouble() - 0.5) * 0.08f),
+                rot = (float)(rng.NextDouble() * Mathf.PI),
+                scaleX = stretchX ? e : 1f,
+                scaleY = stretchX ? 1f : e,
+                coastWarp = Mathf.Lerp(0.3f, 0.6f, (float)rng.NextDouble())
+            };
+        }
+
+        /// <summary>Normalized (0..1) multi-octave Perlin sample at fractional coords, optionally ridged.</summary>
+        public static float SampleHeightF(float fx, float fy, NoiseSettings n, float seedOffset, bool ridged)
         {
             float h = 0f, amp = n.amplitude, freq = n.frequency, norm = 0f;
             int octaves = Mathf.Max(1, n.octaves);
             for (int o = 0; o < octaves; o++)
             {
-                float v = Mathf.PerlinNoise(
-                    (float)x / size * freq + seedOffset,
-                    (float)y / size * freq + seedOffset);
+                float v = Mathf.PerlinNoise(fx * freq + seedOffset, fy * freq + seedOffset);
                 if (ridged) v = 1f - Mathf.Abs(v * 2f - 1f); // sharp ridgelines
                 h += v * amp;
                 norm += amp;
@@ -40,27 +63,55 @@ namespace IslandSystem
             return norm > 0f ? h / norm : h;
         }
 
-        /// <summary>1 at the center, fading to 0 at the edges so the land sinks into the sea.</summary>
-        public static float IslandMask(int x, int y, int size, float falloff)
+        /// <summary>
+        /// Irregular island mask: an offset / rotated / elongated blob with a noise-distorted coastline and a
+        /// PLATEAU interior (≈1) that tapers to sea at the coast. The plateau is what lets peaks form wherever
+        /// the terrain noise is high instead of always at the centre. Always 0 at the tile border (no cliffs).
+        /// </summary>
+        static float IslandShapeMask(int x, int y, int size, float falloff, ShapeParams sp)
         {
-            float dx = (float)x / size - 0.5f;
-            float dy = (float)y / size - 0.5f;
-            float dist = Mathf.Sqrt(dx * dx + dy * dy) * 2f; // 0 center, ~1 at edge midpoints
-            return Mathf.Pow(Mathf.Clamp01(1f - dist), falloff);
+            float fx = (float)x / size, fy = (float)y / size;
+            float u = fx - 0.5f - sp.center.x;
+            float v = fy - 0.5f - sp.center.y;
+            float cs = Mathf.Cos(sp.rot), sn = Mathf.Sin(sp.rot);
+            float ru = (u * cs - v * sn) * sp.scaleX;
+            float rv = (u * sn + v * cs) * sp.scaleY;
+            float dist = Mathf.Sqrt(ru * ru + rv * rv) * 2.05f;
+
+            // Distort the coastline so it isn't a clean circle (bays + peninsulas).
+            float w1 = Mathf.PerlinNoise(fx * 3f + sp.seedOffset, fy * 3f + sp.seedOffset * 0.7f + 13.1f);
+            float w2 = Mathf.PerlinNoise(fx * 6.5f + sp.seedOffset * 1.7f + 5.3f, fy * 6.5f + sp.seedOffset * 0.3f + 91.7f);
+            dist += (w1 - 0.5f) * sp.coastWarp + (w2 - 0.5f) * sp.coastWarp * 0.45f;
+
+            float edge = 1f - dist;
+            if (edge <= 0f) return 0f;
+            float coast = Mathf.Clamp(0.6f - falloff * 0.12f, 0.18f, 0.45f); // coast taper width
+            float m = edge >= coast ? 1f : edge / coast;
+            m = Mathf.SmoothStep(0f, 1f, m);
+
+            // Rim guard: force sea at the very tile edge so land never makes a straight cliff there.
+            float border = Mathf.Min(Mathf.Min(fx, 1f - fx), Mathf.Min(fy, 1f - fy));
+            m *= Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(border / 0.04f));
+            return m;
         }
 
-        /// <summary>Builds the full masked + shaped heightmap (shared by both entry points).</summary>
+        /// <summary>Builds the full masked + shaped heightmap with domain-warped, plateau-shaped terrain.</summary>
         static float[,] BuildHeights(int hmRes, NoiseSettings noise, HeightProfileMode profile,
-                                     int terraceSteps, AnimationCurve curve, float falloff, float seedOffset)
+                                     int terraceSteps, AnimationCurve curve, float falloff, ShapeParams sp)
         {
             bool ridged = profile == HeightProfileMode.Ridged;
             var heights = new float[hmRes, hmRes];
+            const float warpAmp = 0.06f;
             for (int y = 0; y < hmRes; y++)
             {
                 for (int x = 0; x < hmRes; x++)
                 {
-                    float baseH = SampleHeight(x, y, hmRes, noise, seedOffset, ridged);
-                    float mask = IslandMask(x, y, hmRes, falloff);
+                    float fx = (float)x / hmRes, fy = (float)y / hmRes;
+                    // Domain-warp the terrain noise for organic, non-radial features.
+                    float wx = (Mathf.PerlinNoise(fx * 2f + sp.seedOffset + 31.1f, fy * 2f + sp.seedOffset + 17.7f) - 0.5f) * warpAmp;
+                    float wy = (Mathf.PerlinNoise(fx * 2f + sp.seedOffset + 71.3f, fy * 2f + sp.seedOffset + 53.9f) - 0.5f) * warpAmp;
+                    float baseH = SampleHeightF(fx + wx, fy + wy, noise, sp.seedOffset, ridged);
+                    float mask = IslandShapeMask(x, y, hmRes, falloff, sp);
                     float h = curve.Evaluate(Mathf.Clamp01(baseH * mask));
                     if (profile == HeightProfileMode.Terraced)
                     {
@@ -105,10 +156,10 @@ namespace IslandSystem
             data.alphamapResolution = 256;
 
             var rng = new System.Random(seed);
-            float seedOffset = (float)(rng.NextDouble() * 10000.0);
+            ShapeParams shape = MakeShapeParams(rng);
             int hmRes = data.heightmapResolution;
             float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
-                def.terraceSteps, def.heightCurve, def.islandFalloff, seedOffset);
+                def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
             data.SetHeights(0, 0, heights);
 
             // Valid biomes, sorted low -> high.
