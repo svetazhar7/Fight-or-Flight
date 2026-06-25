@@ -14,11 +14,10 @@ namespace IslandSystem
     /// </summary>
     public class ArchipelagoGenerator : MonoBehaviour
     {
-        [Header("Biomes")]
-        [Tooltip("Palette: each island randomly picks one of these. If empty, falls back to 'biome' below.")]
-        public List<BiomeAssetManifest> biomes = new List<BiomeAssetManifest>();
-        [Tooltip("Fallback biome used only when the palette above is empty.")]
-        public BiomeAssetManifest biome;
+        [Header("Island types")]
+        [Tooltip("Palette of island TYPE definitions. Each island picks one and is composed of its weighted " +
+                 "biomes (painted into elevation bands by %).")]
+        public List<IslandTypeDefinition> islandTypes = new List<IslandTypeDefinition>();
 
         [Header("Layout")]
         [Min(1)] public int islandCount = 5;
@@ -52,10 +51,10 @@ namespace IslandSystem
         [ContextMenu("Generate")]
         public void Generate()
         {
-            var palette = BuildPalette();
-            if (palette.Count == 0)
+            var typePalette = BuildTypePalette();
+            if (typePalette.Count == 0)
             {
-                Debug.LogError("[Archipelago] No biomes assigned (palette and fallback are both empty).", this);
+                Debug.LogError("[Archipelago] No island types assigned.", this);
                 return;
             }
 
@@ -72,32 +71,33 @@ namespace IslandSystem
             {
                 int seed = baseSeed + i * 977;
                 var rng = new System.Random(seed);
-
-                BiomeAssetManifest b = palette[rng.Next(palette.Count)];
                 float mult = Mathf.Lerp(sizeMultiplierRange.x, sizeMultiplierRange.y, (float)rng.NextDouble());
-                Vector3 size = Vector3.Scale(b.terrainSize, new Vector3(mult, mult, mult));
+
+                IslandTypeDefinition def = typePalette[rng.Next(typePalette.Count)];
+                Vector3 size = Vector3.Scale(def.terrainSize, new Vector3(mult, mult, mult));
 
                 float landRadius = Mathf.Max(size.x, size.z) * 0.5f * landFraction;
                 Vector3 center = FindPlacement(rng, placed, landRadius);
                 placed.Add(new Placed { center = center, landRadius = landRadius });
 
-                TerrainData data = IslandTerrainGenerator.BuildTerrainData(b, seed, size);
-                data.name = $"Island_{i}_TerrainData";
+                // Create the TerrainData asset FIRST, then populate it. SetAlphamaps only persists once the
+                // TerrainData is a live asset — populating before CreateAsset drops the splatmap.
+                var data = new TerrainData { name = $"Island_{i}_TerrainData" };
 #if UNITY_EDITOR
-                string path = $"{generatedFolder}/Island_{i}.asset";
-                AssetDatabase.CreateAsset(data, path);
+                AssetDatabase.CreateAsset(data, $"{generatedFolder}/Island_{i}.asset");
 #endif
+                float waterline = waterLevel / Mathf.Max(0.0001f, size.y);
+                IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands);
 
                 GameObject terrainGO = Terrain.CreateTerrainGameObject(data);
-                terrainGO.name = $"Island_{i}_{b.biomeName}";
+                terrainGO.name = $"Island_{i}_{def.islandType}";
                 terrainGO.transform.SetParent(root, true);
-                // Center the island tile on its placement point.
                 terrainGO.transform.position = center + new Vector3(-size.x * 0.5f, 0f, -size.z * 0.5f);
 
                 var terrain = terrainGO.GetComponent<Terrain>();
                 if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
-                IslandTerrainGenerator.ScatterObjects(terrain, b, seed);
+                IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands);
             }
 
             CreateOcean(root);
@@ -105,7 +105,16 @@ namespace IslandSystem
 #if UNITY_EDITOR
             AssetDatabase.SaveAssets();
 #endif
-            Debug.Log($"[Archipelago] Generated {islandCount} island(s) from {palette.Count} biome(s).", this);
+            Debug.Log($"[Archipelago] Generated {islandCount} island(s) from {typePalette.Count} island type(s).", this);
+        }
+
+        List<IslandTypeDefinition> BuildTypePalette()
+        {
+            var palette = new List<IslandTypeDefinition>();
+            if (islandTypes != null)
+                foreach (var t in islandTypes)
+                    if (t != null) palette.Add(t);
+            return palette;
         }
 
         [ContextMenu("Clear")]
@@ -120,18 +129,6 @@ namespace IslandSystem
                     else DestroyImmediate(child.gameObject);
                 }
             }
-        }
-
-        // ---- Biome palette -----------------------------------------------
-
-        List<BiomeAssetManifest> BuildPalette()
-        {
-            var palette = new List<BiomeAssetManifest>();
-            if (biomes != null)
-                foreach (var b in biomes)
-                    if (b != null) palette.Add(b);
-            if (palette.Count == 0 && biome != null) palette.Add(biome);
-            return palette;
         }
 
         // ---- Placement ----------------------------------------------------

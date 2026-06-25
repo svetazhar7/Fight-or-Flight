@@ -4,13 +4,21 @@ using UnityEngine;
 namespace IslandSystem
 {
     /// <summary>
-    /// Pure terrain construction from a <see cref="BiomeAssetManifest"/>: heightmap (multi-octave Perlin,
-    /// optionally ridged/terraced, masked into an island shape), splatmap (condition-driven texture
-    /// layers) and object scatter (condition-driven spawn rules). Stateless on purpose so the same biome
-    /// + different seeds give different islands.
+    /// Terrain construction for the island system. <see cref="BuildIslandFromType"/> (or
+    /// <see cref="PopulateIslandFromType"/>) builds an island from an <see cref="IslandTypeDefinition"/>,
+    /// whose weighted biomes are laid into elevation bands sized by their share of the island's land area.
+    /// Stateless so the same input + different seeds give different islands.
     /// </summary>
     public static class IslandTerrainGenerator
     {
+        /// <summary>An elevation slice [lo, hi] (normalized height) owned by one biome.</summary>
+        public struct BiomeBand
+        {
+            public BiomeAssetManifest biome;
+            public float lo;
+            public float hi;
+        }
+
         // ---- Heightmap ----------------------------------------------------
 
         /// <summary>Normalized (0..1) multi-octave Perlin sample, optionally ridged.</summary>
@@ -41,95 +49,215 @@ namespace IslandSystem
             return Mathf.Pow(Mathf.Clamp01(1f - dist), falloff);
         }
 
-        // ---- Public entry point ------------------------------------------
-
-        /// <summary>
-        /// Builds a fresh <see cref="TerrainData"/> for the biome using the given seed. Pass
-        /// <paramref name="sizeOverride"/> to scale this island independently of the biome template
-        /// (used by the archipelago to spawn islands of different sizes).
-        /// </summary>
-        public static TerrainData BuildTerrainData(BiomeAssetManifest biome, int seed, Vector3? sizeOverride = null)
+        /// <summary>Builds the full masked + shaped heightmap (shared by both entry points).</summary>
+        static float[,] BuildHeights(int hmRes, NoiseSettings noise, HeightProfileMode profile,
+                                     int terraceSteps, AnimationCurve curve, float falloff, float seedOffset)
         {
-            int res = Mathf.Max(33, biome.heightmapResolution);
-            var data = new TerrainData { heightmapResolution = res };
-            data.size = sizeOverride ?? biome.terrainSize;
-
-            var rng = new System.Random(seed);
-            float seedOffset = (float)(rng.NextDouble() * 10000.0);
-            bool ridged = biome.heightProfile == HeightProfileMode.Ridged;
-
-            int hmRes = data.heightmapResolution; // Unity may snap to 2^n+1
-            float[,] heights = new float[hmRes, hmRes];
+            bool ridged = profile == HeightProfileMode.Ridged;
+            var heights = new float[hmRes, hmRes];
             for (int y = 0; y < hmRes; y++)
             {
                 for (int x = 0; x < hmRes; x++)
                 {
-                    float baseH = SampleHeight(x, y, hmRes, biome.noiseSettings, seedOffset, ridged);
-                    float mask = IslandMask(x, y, hmRes, biome.islandFalloff);
-                    float h = biome.heightCurve.Evaluate(Mathf.Clamp01(baseH * mask));
-                    if (biome.heightProfile == HeightProfileMode.Terraced)
+                    float baseH = SampleHeight(x, y, hmRes, noise, seedOffset, ridged);
+                    float mask = IslandMask(x, y, hmRes, falloff);
+                    float h = curve.Evaluate(Mathf.Clamp01(baseH * mask));
+                    if (profile == HeightProfileMode.Terraced)
                     {
-                        int steps = Mathf.Max(2, biome.terraceSteps);
+                        int steps = Mathf.Max(2, terraceSteps);
                         h = Mathf.Round(h * steps) / steps;
                     }
                     heights[y, x] = Mathf.Clamp01(h);
                 }
             }
-            data.SetHeights(0, 0, heights);
+            return heights;
+        }
 
-            var layers = biome.CollectTerrainLayers();
-            if (layers.Length > 0)
-            {
-                data.terrainLayers = layers;
-                ApplyAlphamaps(data, biome, layers);
-            }
+        // ---- Island from a type definition (multi-biome composition) -----
 
+        /// <summary>
+        /// Builds an island from an <see cref="IslandTypeDefinition"/>. Its weighted biomes are sorted by
+        /// <see cref="BiomeAssetManifest.elevationOrder"/> and each is assigned an elevation band whose
+        /// width is sized so the band's fraction of the island's LAND AREA equals the biome's percentage.
+        /// The splatmap paints each band with the biome's real texture (or a solid <c>debugColor</c> layer
+        /// while textures are missing). The resulting <paramref name="bands"/> drive per-biome spawning.
+        /// </summary>
+        public static TerrainData BuildIslandFromType(IslandTypeDefinition def, int seed,
+            Vector3? sizeOverride, float waterlineNormalized, out List<BiomeBand> bands)
+        {
+            var data = new TerrainData();
+            PopulateIslandFromType(data, def, seed, sizeOverride ?? def.terrainSize, waterlineNormalized, out bands);
             return data;
         }
 
-        // ---- Texturing ----------------------------------------------------
-
-        static void ApplyAlphamaps(TerrainData data, BiomeAssetManifest biome, TerrainLayer[] layers)
+        /// <summary>
+        /// Fills an existing TerrainData with the composed island. When it will be saved as an asset, create
+        /// the asset BEFORE calling this so the SetAlphamaps splatmap persists (CreateAsset drops in-memory
+        /// splats — the cause of the "all beach" bug).
+        /// </summary>
+        public static void PopulateIslandFromType(TerrainData data, IslandTypeDefinition def, int seed,
+            Vector3 size, float waterlineNormalized, out List<BiomeBand> bands)
         {
-            // Map each non-null BiomeTextureLayer to its index in the TerrainData layer array.
-            var entries = new List<BiomeTextureLayer>();
-            foreach (var l in biome.textureLayers)
-                if (l != null && l.terrainLayer != null) entries.Add(l);
+            bands = new List<BiomeBand>();
 
-            int layerCount = layers.Length;
+            data.heightmapResolution = Mathf.Max(33, def.heightmapResolution);
+            data.size = size;
+            data.alphamapResolution = 256;
+
+            var rng = new System.Random(seed);
+            float seedOffset = (float)(rng.NextDouble() * 10000.0);
+            int hmRes = data.heightmapResolution;
+            float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
+                def.terraceSteps, def.heightCurve, def.islandFalloff, seedOffset);
+            data.SetHeights(0, 0, heights);
+
+            // Valid biomes, sorted low -> high.
+            var entries = new List<WeightedBiome>();
+            if (def.biomes != null)
+                foreach (var w in def.biomes)
+                    if (w != null && w.biome != null && w.percent > 0f) entries.Add(w);
+            if (entries.Count == 0) return;
+            entries.Sort((a, b) => a.biome.elevationOrder.CompareTo(b.biome.elevationOrder));
+
+            int n = entries.Count;
+            float totalPct = 0f;
+            foreach (var e in entries) totalPct += e.percent;
+
+            // Land-area percentile edges: edge[k+1] = height below which cumulative% of land lies.
+            var land = new List<float>(hmRes * hmRes / 2);
+            for (int y = 0; y < hmRes; y++)
+                for (int x = 0; x < hmRes; x++)
+                    if (heights[y, x] > waterlineNormalized) land.Add(heights[y, x]);
+            if (land.Count == 0)
+                for (int y = 0; y < hmRes; y++)
+                    for (int x = 0; x < hmRes; x++) land.Add(heights[y, x]);
+            land.Sort();
+
+            float[] edges = new float[n + 1];
+            edges[0] = 0f;
+            edges[n] = 1f;
+            float acc = 0f;
+            for (int k = 0; k < n - 1; k++)
+            {
+                acc += entries[k].percent / totalPct;
+                edges[k + 1] = Quantile(land, acc);
+            }
+            for (int k = 1; k <= n; k++)
+                if (edges[k] < edges[k - 1]) edges[k] = edges[k - 1]; // keep monotonic
+
+            // Terrain layers + band records.
+            var layers = new TerrainLayer[n];
+            for (int k = 0; k < n; k++)
+            {
+                layers[k] = GetBiomeLayer(entries[k].biome);
+                bands.Add(new BiomeBand { biome = entries[k].biome, lo = edges[k], hi = edges[k + 1] });
+            }
+            data.terrainLayers = layers;
+
+            // Paint splatmap by band with soft edges.
             int aw = data.alphamapResolution;
-            var maps = new float[aw, aw, layerCount];
-
+            var maps = new float[aw, aw, n];
+            const float blend = 0.03f;
             for (int y = 0; y < aw; y++)
             {
                 for (int x = 0; x < aw; x++)
                 {
                     float nx = (float)x / (aw - 1);
                     float ny = (float)y / (aw - 1);
-                    float height01 = data.GetInterpolatedHeight(nx, ny) / Mathf.Max(0.0001f, data.size.y);
-                    float slopeDeg = data.GetSteepness(nx, ny);
+                    float h = data.GetInterpolatedHeight(nx, ny) / Mathf.Max(0.0001f, data.size.y);
 
+                    // Cumulative band membership: weight_k = (fraction at/above edge[k]) - (… above edge[k+1]).
+                    // This telescopes to a partition of unity, so cells sitting exactly on an edge split
+                    // smoothly between neighbours instead of collapsing to zero (critical for terraced terrain).
                     float total = 0f;
-                    for (int i = 0; i < entries.Count; i++)
+                    for (int k = 0; k < n; k++)
                     {
-                        float w = ConditionWeight(entries[i].where, height01, slopeDeg) * Mathf.Max(0f, entries[i].weight);
-                        maps[y, x, i] += w;
+                        float cumLow = (k == 0) ? 1f : AboveEdge(h, edges[k], blend);
+                        float cumHigh = (k == n - 1) ? 0f : AboveEdge(h, edges[k + 1], blend);
+                        float w = Mathf.Clamp01(cumLow - cumHigh);
+                        maps[y, x, k] = w;
                         total += w;
                     }
-
-                    if (total > 0.0001f)
-                    {
-                        for (int l = 0; l < layerCount; l++) maps[y, x, l] /= total;
-                    }
-                    else
-                    {
-                        maps[y, x, 0] = 1f; // never leave a transparent splat
-                    }
+                    if (total > 0.0001f) { for (int k = 0; k < n; k++) maps[y, x, k] /= total; }
+                    else maps[y, x, 0] = 1f;
                 }
             }
-
             data.SetAlphamaps(0, 0, maps);
         }
+
+        /// <summary>Smooth cumulative weight at/above edge <paramref name="e"/>: 0.5 at h==e, →1 above, →0 below.</summary>
+        static float AboveEdge(float h, float e, float blend)
+            => Mathf.SmoothStep(0f, 1f, (h - e) / (2f * blend) + 0.5f);
+
+        static float Quantile(List<float> sorted, float p)
+        {
+            if (sorted.Count == 0) return Mathf.Clamp01(p);
+            int idx = Mathf.Clamp(Mathf.RoundToInt(p * (sorted.Count - 1)), 0, sorted.Count - 1);
+            return sorted[idx];
+        }
+
+        // ---- Texture layers ----------------------------------------------
+
+        /// <summary>The biome's first real TerrainLayer, or a solid <c>debugColor</c> layer as a stand-in.</summary>
+        static TerrainLayer GetBiomeLayer(BiomeAssetManifest biome)
+        {
+            if (biome.textureLayers != null)
+                foreach (var l in biome.textureLayers)
+                    if (l != null && l.terrainLayer != null) return l.terrainLayer;
+            return GetOrCreateDebugLayer(biome);
+        }
+
+        /// <summary>A reusable solid-colour TerrainLayer used to preview a biome before art exists.</summary>
+        static TerrainLayer GetOrCreateDebugLayer(BiomeAssetManifest biome)
+        {
+#if UNITY_EDITOR
+            const string genFolder = "Assets/IslandSystem/Generated";
+            const string dir = genFolder + "/Debug";
+            if (!UnityEditor.AssetDatabase.IsValidFolder(genFolder))
+                UnityEditor.AssetDatabase.CreateFolder("Assets/IslandSystem", "Generated");
+            if (!UnityEditor.AssetDatabase.IsValidFolder(dir))
+                UnityEditor.AssetDatabase.CreateFolder(genFolder, "Debug");
+
+            string id = UnityEditor.AssetDatabase.AssetPathToGUID(UnityEditor.AssetDatabase.GetAssetPath(biome));
+            if (string.IsNullOrEmpty(id)) id = biome.name;
+            string texPath = dir + "/" + id + "_tex.asset";
+            string layerPath = dir + "/" + id + ".terrainlayer";
+
+            var tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+            if (tex == null)
+            {
+                tex = new Texture2D(8, 8);
+                UnityEditor.AssetDatabase.CreateAsset(tex, texPath);
+            }
+            FillColor(tex, biome.debugColor);
+            UnityEditor.EditorUtility.SetDirty(tex);
+
+            var layer = UnityEditor.AssetDatabase.LoadAssetAtPath<TerrainLayer>(layerPath);
+            if (layer == null)
+            {
+                layer = new TerrainLayer();
+                UnityEditor.AssetDatabase.CreateAsset(layer, layerPath);
+            }
+            layer.diffuseTexture = tex;
+            layer.tileSize = new Vector2(40f, 40f);
+            UnityEditor.EditorUtility.SetDirty(layer);
+            return layer;
+#else
+            var tex = new Texture2D(8, 8);
+            FillColor(tex, biome.debugColor);
+            return new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(40f, 40f) };
+#endif
+        }
+
+        static void FillColor(Texture2D tex, Color c)
+        {
+            var px = new Color[tex.width * tex.height];
+            for (int i = 0; i < px.Length; i++) px[i] = c;
+            tex.SetPixels(px);
+            tex.Apply();
+        }
+
+        // ---- Condition helpers -------------------------------------------
 
         /// <summary>0..1 membership of a point (given its height &amp; slope) in a placement condition.</summary>
         public static float ConditionWeight(PlacementCondition c, float height01, float slopeDeg)
@@ -152,28 +280,40 @@ namespace IslandSystem
 
         // ---- Object scatter ----------------------------------------------
 
-        /// <summary>
-        /// Scatters objects from the biome's spawn rules onto the terrain as child GameObjects.
-        /// Each rule places its own count where its condition holds, with per-instance variation.
-        /// </summary>
-        public static void ScatterObjects(Terrain terrain, BiomeAssetManifest biome, int seed)
+        /// <summary>Scatters each composed biome's spawn rules, confined to that biome's elevation band.</summary>
+        public static void ScatterCompositionObjects(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
         {
-            if (biome.spawnRules == null || biome.spawnRules.Count == 0) return;
+            if (bands == null) return;
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                if (band.biome == null || band.biome.spawnRules == null || band.biome.spawnRules.Count == 0) continue;
+                ScatterRuleList(terrain, band.biome.spawnRules, seed + bi * 101, band.lo, band.hi);
+            }
+        }
 
+        /// <summary>Places a list of spawn rules, gating each instance to the [bandLo, bandHi] height window.</summary>
+        static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi)
+        {
             var data = terrain.terrainData;
             Vector3 origin = terrain.transform.position;
 
             Transform holder = null;
             int ruleIndex = 0;
-            foreach (var rule in biome.spawnRules)
+            foreach (var rule in rules)
             {
                 ruleIndex++;
                 if (rule == null || !rule.IsValid) continue;
 
                 if (holder == null)
                 {
-                    holder = new GameObject("Spawned").transform;
-                    holder.SetParent(terrain.transform, false);
+                    holder = terrain.transform.Find("Spawned");
+                    if (holder == null)
+                    {
+                        holder = new GameObject("Spawned").transform;
+                        holder.SetParent(terrain.transform, false);
+                    }
                 }
 
                 var rng = new System.Random(seed * 73856093 ^ ruleIndex * 19349663);
@@ -184,6 +324,7 @@ namespace IslandSystem
                     float v = (float)rng.NextDouble();
 
                     float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
+                    if (height01 < bandLo || height01 > bandHi) continue;
                     float slopeDeg = data.GetSteepness(u, v);
                     if (ConditionWeight(rule.where, height01, slopeDeg) <= 0.001f) continue;
 
@@ -202,13 +343,9 @@ namespace IslandSystem
 #else
                     go = Object.Instantiate(prefab, worldPos, Quaternion.identity, holder);
 #endif
-                    // Rotation: optional alignment to ground normal, then optional random yaw.
                     Quaternion rot = Quaternion.identity;
                     if (rule.alignToNormal)
-                    {
-                        Vector3 normal = data.GetInterpolatedNormal(u, v);
-                        rot = Quaternion.FromToRotation(Vector3.up, normal);
-                    }
+                        rot = Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v));
                     if (rule.randomYRotation)
                         rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
                     go.transform.rotation = rot;
