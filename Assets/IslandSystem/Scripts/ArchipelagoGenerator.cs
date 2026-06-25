@@ -180,7 +180,7 @@ namespace IslandSystem
             AssetDatabase.CreateAsset(data, $"{generatedFolder}/{prefix}_{nameIndex}.asset");
 #endif
             float waterline = waterLevel / Mathf.Max(0.0001f, size.y);
-            IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, resolution);
+            IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, out var villages, resolution);
 
             GameObject go = Terrain.CreateTerrainGameObject(data);
             go.name = $"{prefix}_{nameIndex}_{def.islandType}";
@@ -191,9 +191,10 @@ namespace IslandSystem
             terrain.allowAutoConnect = false; // islands are independent; avoids "different heightmap resolution" spam
             if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
-            IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands);
-            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands);   // Unity Terrain tree instances
-            IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands); // rock GameObjects
+            IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, villages);
+            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // Unity Terrain tree instances (off villages)
+            IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, villages); // rock GameObjects (off villages)
+            IslandTerrainGenerator.PlaceVillageBuildings(terrain, villages, seed);    // buildings on the flattened ground
 
             var marker = go.AddComponent<IslandMarker>();
             marker.isHub = isHub;

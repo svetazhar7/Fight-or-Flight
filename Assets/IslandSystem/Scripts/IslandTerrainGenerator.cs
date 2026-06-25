@@ -19,6 +19,15 @@ namespace IslandSystem
             public float hi;
         }
 
+        /// <summary>A flattened build zone: ground inside is levelled to <see cref="smoothedHeight"/>.</summary>
+        public struct VillageZone
+        {
+            public BiomeAssetManifest biome;
+            public Vector2 centerUV;      // normalized tile coords of the centre
+            public float radiusWorld;     // flat-zone radius (world units)
+            public float smoothedHeight;  // local Y of the levelled ground (= normalized * size.y)
+        }
+
         // ---- Heightmap ----------------------------------------------------
 
         /// <summary>Per-island randomized shape controls: coastline irregularity, elongation, placement.</summary>
@@ -137,7 +146,7 @@ namespace IslandSystem
             Vector3? sizeOverride, float waterlineNormalized, out List<BiomeBand> bands)
         {
             var data = new TerrainData();
-            PopulateIslandFromType(data, def, seed, sizeOverride ?? def.terrainSize, waterlineNormalized, out bands);
+            PopulateIslandFromType(data, def, seed, sizeOverride ?? def.terrainSize, waterlineNormalized, out bands, out _);
             return data;
         }
 
@@ -147,9 +156,11 @@ namespace IslandSystem
         /// splats — the cause of the "all beach" bug).
         /// </summary>
         public static void PopulateIslandFromType(TerrainData data, IslandTypeDefinition def, int seed,
-            Vector3 size, float waterlineNormalized, out List<BiomeBand> bands, int resolutionOverride = 0)
+            Vector3 size, float waterlineNormalized, out List<BiomeBand> bands, out List<VillageZone> villages,
+            int resolutionOverride = 0)
         {
             bands = new List<BiomeBand>();
+            villages = new List<VillageZone>();
 
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
@@ -199,6 +210,10 @@ namespace IslandSystem
                 layers[k] = GetBiomeLayer(entries[k].biome);
                 bands.Add(new BiomeBand { biome = entries[k].biome, lo = edges[k], hi = edges[k + 1] });
             }
+
+            // ---- Villages: pick sites + FLATTEN the heightmap array now, before the splat & SetHeights so
+            // the levelled ground is what gets textured and committed. ----
+            ChooseAndFlattenVillages(heights, hmRes, size, bands, waterlineNormalized, seed, villages);
 
             // Paint splatmap by band with soft edges.
             const int aw = 256;
@@ -350,8 +365,8 @@ namespace IslandSystem
         /// <summary>Normalized height below which a cell is the island's fade-to-sea zone (no objects there).</summary>
         const float FadeThreshold = 0.05f;
 
-        /// <summary>Scatters each composed biome's generic prop rules (Props/) as GameObjects, per band.</summary>
-        public static void ScatterCompositionObjects(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
+        /// <summary>Scatters each composed biome's generic prop rules (Props/) as GameObjects, per band, keeping out of villages.</summary>
+        public static void ScatterCompositionObjects(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             if (bands == null) return;
             int bi = 0;
@@ -359,12 +374,12 @@ namespace IslandSystem
             {
                 bi++;
                 if (band.biome == null || band.biome.spawnRules == null || band.biome.spawnRules.Count == 0) continue;
-                ScatterRuleList(terrain, band.biome.spawnRules, seed + bi * 101, band.lo, band.hi, "Spawned");
+                ScatterRuleList(terrain, band.biome.spawnRules, seed + bi * 101, band.lo, band.hi, "Spawned", villages);
             }
         }
 
-        /// <summary>Scatters each composed biome's ROCK rules (Rocks/) as GameObjects under a "Rocks" holder.</summary>
-        public static void ScatterRocks(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
+        /// <summary>Scatters each composed biome's ROCK rules (Rocks/) as GameObjects under a "Rocks" holder, keeping out of villages.</summary>
+        public static void ScatterRocks(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             if (bands == null) return;
             int bi = 0;
@@ -372,7 +387,7 @@ namespace IslandSystem
             {
                 bi++;
                 if (band.biome == null || band.biome.rockRules == null || band.biome.rockRules.Count == 0) continue;
-                ScatterRuleList(terrain, band.biome.rockRules, seed + bi * 101, band.lo, band.hi, "Rocks");
+                ScatterRuleList(terrain, band.biome.rockRules, seed + bi * 101, band.lo, band.hi, "Rocks", villages);
             }
         }
 
@@ -381,7 +396,7 @@ namespace IslandSystem
         /// Unity Terrain tree instances — each confined to its biome's elevation band, off the fade zone and
         /// off slopes the rule's condition rejects. Uses the island <paramref name="seed"/> for determinism.
         /// </summary>
-        public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
+        public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             var data = terrain.terrainData;
             if (bands == null) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); return; }
@@ -423,6 +438,7 @@ namespace IslandSystem
                     {
                         float u = (float)rng.NextDouble();
                         float v = (float)rng.NextDouble();
+                        if (InAnyVillage(u, v, data.size, villages)) continue;
                         float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
                         if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
                         float slopeDeg = data.GetSteepness(u, v);
@@ -453,7 +469,7 @@ namespace IslandSystem
         /// Places spawn rules as GameObjects under <paramref name="holderName"/>, gating each instance to the
         /// [bandLo, bandHi] height window and off the fade zone. Supports per-axis scale and normal alignment.
         /// </summary>
-        static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi, string holderName)
+        static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi, string holderName, List<VillageZone> villages)
         {
             var data = terrain.terrainData;
             Vector3 origin = terrain.transform.position;
@@ -481,6 +497,7 @@ namespace IslandSystem
                 {
                     float u = (float)rng.NextDouble();
                     float v = (float)rng.NextDouble();
+                    if (InAnyVillage(u, v, data.size, villages)) continue;
 
                     float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
                     if (height01 < FadeThreshold || height01 < bandLo || height01 > bandHi) continue;
@@ -524,6 +541,182 @@ namespace IslandSystem
                         if (s > 0f) go.transform.localScale = baseScale * s;
                     }
 
+                    placed++;
+                }
+            }
+        }
+
+        // ---- Villages -----------------------------------------------------
+
+        /// <summary>True if normalized point (u,v) lies inside any flattened village zone.</summary>
+        static bool InAnyVillage(float u, float v, Vector3 size, List<VillageZone> villages)
+        {
+            if (villages == null) return false;
+            float lx = u * size.x, lz = v * size.z;
+            foreach (var z in villages)
+            {
+                float dx = lx - z.centerUV.x * size.x, dz = lz - z.centerUV.y * size.z;
+                if (dx * dx + dz * dz < z.radiusWorld * z.radiusWorld) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Slope (degrees) at normalized (u,v) from the height ARRAY (used before the terrain exists).</summary>
+        static float SlopeAt(float[,] h, float u, float v, Vector3 size, int res)
+        {
+            int x = Mathf.Clamp(Mathf.RoundToInt(u * (res - 1)), 1, res - 2);
+            int y = Mathf.Clamp(Mathf.RoundToInt(v * (res - 1)), 1, res - 2);
+            float dhx = (h[y, x + 1] - h[y, x - 1]) * size.y / (2f * (size.x / (res - 1)));
+            float dhz = (h[y + 1, x] - h[y - 1, x]) * size.y / (2f * (size.z / (res - 1)));
+            return Mathf.Atan(Mathf.Sqrt(dhx * dhx + dhz * dhz)) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>
+        /// Picks village sites for biomes with valid <see cref="VillageSettings"/> and FLATTENS the height
+        /// array under each (level to the local average, SmoothStep blend on the rim). Prefers flat, in-band,
+        /// off-fade ground far from other villages; if nothing qualifies it still uses the flattest candidate
+        /// (the site is cleared of trees/rocks regardless).
+        /// </summary>
+        static void ChooseAndFlattenVillages(float[,] heights, int res, Vector3 size, List<BiomeBand> bands,
+            float waterline, int seed, List<VillageZone> villages)
+        {
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                var biome = band.biome;
+                if (biome == null || biome.village == null || !biome.village.IsValid) continue;
+                var vs = biome.village;
+                var rng = new System.Random(seed * 6151 + bi * 40503);
+
+                // Candidates in this biome's band, above the fade zone, with their slope.
+                var cands = new List<(float u, float v, float slope)>();
+                int tries = Mathf.Max(400, vs.villageCount * 500);
+                float fadeMin = Mathf.Max(waterline, FadeThreshold) + 0.03f;
+                for (int t = 0; t < tries; t++)
+                {
+                    float u = (float)rng.NextDouble(), v = (float)rng.NextDouble();
+                    float h = SampleGrid(heights, u, v);
+                    if (h < fadeMin || h < band.lo || h > band.hi) continue;
+                    cands.Add((u, v, SlopeAt(heights, u, v, size, res)));
+                }
+                cands.Sort((a, b) => a.slope.CompareTo(b.slope)); // flattest first (fallback-friendly)
+
+                int placedForBiome = 0;
+                foreach (var c in cands)
+                {
+                    if (placedForBiome >= vs.villageCount) break;
+                    var center = new Vector2(c.u, c.v);
+                    if (!FarFromVillages(center, size, villages, vs.minDistanceBetweenVillages)) continue;
+
+                    float smoothedNorm = FlattenZone(heights, res, size, center, vs.villageRadius, vs.blendRadius);
+                    villages.Add(new VillageZone
+                    {
+                        biome = biome,
+                        centerUV = center,
+                        radiusWorld = vs.villageRadius,
+                        smoothedHeight = smoothedNorm * size.y
+                    });
+                    placedForBiome++;
+                }
+            }
+        }
+
+        static bool FarFromVillages(Vector2 centerUV, Vector3 size, List<VillageZone> villages, float minDist)
+        {
+            float lx = centerUV.x * size.x, lz = centerUV.y * size.z;
+            foreach (var z in villages)
+            {
+                float dx = lx - z.centerUV.x * size.x, dz = lz - z.centerUV.y * size.z;
+                if (Mathf.Sqrt(dx * dx + dz * dz) < minDist) return false;
+            }
+            return true;
+        }
+
+        /// <summary>Levels the height array within the radius to its average, blending out over blendRadius. Returns the average (normalized).</summary>
+        static float FlattenZone(float[,] heights, int res, Vector3 size, Vector2 centerUV, float radiusWorld, float blendWorld)
+        {
+            float cellX = size.x / (res - 1), cellZ = size.z / (res - 1);
+            float cu = centerUV.x * (res - 1), cv = centerUV.y * (res - 1);
+            float outer = radiusWorld + blendWorld;
+            int rx = Mathf.CeilToInt(outer / cellX) + 1, rz = Mathf.CeilToInt(outer / cellZ) + 1;
+            int x0 = Mathf.Clamp((int)cu - rx, 0, res - 1), x1 = Mathf.Clamp((int)cu + rx, 0, res - 1);
+            int y0 = Mathf.Clamp((int)cv - rz, 0, res - 1), y1 = Mathf.Clamp((int)cv + rz, 0, res - 1);
+
+            double sum = 0; int cnt = 0;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float dx = (x - cu) * cellX, dz = (y - cv) * cellZ;
+                    if (dx * dx + dz * dz <= radiusWorld * radiusWorld) { sum += heights[y, x]; cnt++; }
+                }
+            if (cnt == 0) return SampleGrid(heights, centerUV.x, centerUV.y);
+            float avg = (float)(sum / cnt);
+
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float dx = (x - cu) * cellX, dz = (y - cv) * cellZ;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (d <= radiusWorld) heights[y, x] = avg;
+                    else if (d <= outer)
+                    {
+                        float t = Mathf.SmoothStep(0f, 1f, (d - radiusWorld) / Mathf.Max(0.0001f, blendWorld));
+                        heights[y, x] = Mathf.Lerp(avg, heights[y, x], t);
+                    }
+                }
+            return avg;
+        }
+
+        /// <summary>Places village buildings as GameObjects on the levelled ground of each zone (under a "Village" holder).</summary>
+        public static void PlaceVillageBuildings(Terrain terrain, List<VillageZone> villages, int seed)
+        {
+            if (villages == null || villages.Count == 0) return;
+            var data = terrain.terrainData;
+            Vector3 origin = terrain.transform.position;
+
+            Transform holder = terrain.transform.Find("Village");
+            if (holder == null) { holder = new GameObject("Village").transform; holder.SetParent(terrain.transform, false); }
+
+            int zi = 0;
+            foreach (var z in villages)
+            {
+                zi++;
+                var vs = z.biome != null ? z.biome.village : null;
+                if (vs == null || !vs.IsValid) continue;
+                var rng = new System.Random(seed * 92821 + zi * 35317);
+
+                float cx = z.centerUV.x * data.size.x, cz = z.centerUV.y * data.size.z;
+                float placeR = z.radiusWorld * 0.85f; // keep buildings a touch inside the flat zone
+                var placedXZ = new List<Vector2>();
+                int placed = 0, guard = vs.buildingsPerVillage * 30;
+                while (placed < vs.buildingsPerVillage && guard-- > 0)
+                {
+                    float r = placeR * Mathf.Sqrt((float)rng.NextDouble());
+                    float a = (float)rng.NextDouble() * Mathf.PI * 2f;
+                    Vector2 xz = new Vector2(cx + Mathf.Cos(a) * r, cz + Mathf.Sin(a) * r);
+
+                    bool ok = true;
+                    foreach (var p in placedXZ)
+                        if ((p - xz).sqrMagnitude < vs.minDistanceBetweenBuildings * vs.minDistanceBetweenBuildings) { ok = false; break; }
+                    if (!ok) continue;
+
+                    var prefab = vs.buildingPrefabs[rng.Next(vs.buildingPrefabs.Length)];
+                    if (prefab == null) continue;
+
+                    Vector3 worldPos = origin + new Vector3(xz.x, z.smoothedHeight, xz.y);
+                    GameObject go;
+#if UNITY_EDITOR
+                    go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab, holder);
+                    go.transform.position = worldPos;
+#else
+                    go = Object.Instantiate(prefab, worldPos, Quaternion.identity, holder);
+#endif
+                    if (vs.randomYRotation) go.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                    float s = Mathf.Lerp(vs.buildingScaleRange.x, vs.buildingScaleRange.y, (float)rng.NextDouble());
+                    if (s > 0f) go.transform.localScale = go.transform.localScale * s;
+
+                    placedXZ.Add(xz);
                     placed++;
                 }
             }

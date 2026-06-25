@@ -144,6 +144,39 @@ namespace IslandSystem
     }
 
     /// <summary>
+    /// A village: one or more zones where the heightmap is FLATTENED to a common level before buildings are
+    /// placed on the level ground. Trees/rocks are kept out of these zones. Buildings come from Buildings/.
+    /// </summary>
+    [Serializable]
+    public class VillageSettings
+    {
+        public bool enabled = false;
+        [Tooltip("Building prefabs (from Buildings/); one chosen at random per building.")]
+        public GameObject[] buildingPrefabs = Array.Empty<GameObject>();
+
+        [Tooltip("How many village zones of this biome to place per island.")]
+        [Min(0)] public int villageCount = 1;
+        [Tooltip("World radius of the flattened build zone.")]
+        public float villageRadius = 45f;
+        [Tooltip("Extra width beyond the radius where the flattened ground blends back to the terrain.")]
+        public float blendRadius = 18f;
+
+        [Min(1)] public int buildingsPerVillage = 8;
+        public float minDistanceBetweenVillages = 220f;
+        public float minDistanceBetweenBuildings = 9f;
+
+        [Tooltip("Preferred site for a village centre: height band (0..1) and max slope (deg). Flat low-mid " +
+                 "ground is best; if nothing qualifies, the flattest candidate is used anyway.")]
+        public PlacementCondition where = PlacementCondition.Range(0.12f, 0.7f, 0f, 14f);
+
+        [Header("Buildings")]
+        public Vector2 buildingScaleRange = new Vector2(1f, 1f);
+        public bool randomYRotation = true;
+
+        public bool IsValid => enabled && buildingPrefabs != null && buildingPrefabs.Length > 0 && villageCount > 0;
+    }
+
+    /// <summary>
     /// A biome is a conditional template for an island: how tall/shaped it is (height block), what it is
     /// painted with (condition-driven texture layers) and what spawns on it (condition-driven object
     /// rules). The art lists are normally filled by the "Scan Biome Folder" button; conditions are tuned
@@ -197,6 +230,9 @@ namespace IslandSystem
 
         [Header("Rocks — GameObjects with per-axis scale (from Rocks/)")]
         public List<ObjectSpawnRule> rockRules = new List<ObjectSpawnRule>();
+
+        [Header("Village — flattened build zones (buildings from Buildings/)")]
+        public VillageSettings village = new VillageSettings();
 
         /// <summary>The non-null TerrainLayers in author order — this is what the TerrainData uses.</summary>
         public TerrainLayer[] CollectTerrainLayers()

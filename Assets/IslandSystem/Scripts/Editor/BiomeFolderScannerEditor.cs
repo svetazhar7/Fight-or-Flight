@@ -42,12 +42,14 @@ namespace IslandSystem.EditorTools
 
             EnsureFolder(biomeDir, "Trees");
             EnsureFolder(biomeDir, "Rocks");
+            EnsureFolder(biomeDir, "Buildings");
 
             Undo.RecordObject(manifest, "Scan Biome Folder");
 
             manifest.spawnRules ??= new List<ObjectSpawnRule>();
             manifest.treeRules ??= new List<ObjectSpawnRule>();
             manifest.rockRules ??= new List<ObjectSpawnRule>();
+            manifest.village ??= new VillageSettings();
 
             int newLayers = ScanTextures(manifest, biomeDir + "/Textures", layerDir);
 
@@ -73,12 +75,34 @@ namespace IslandSystem.EditorTools
                 alignToNormal = true, nonUniformScale = true
             });
 
+            int newBuildings = ScanBuildings(manifest, biomeDir + "/Buildings");
+
             EditorUtility.SetDirty(manifest);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
             Debug.Log($"[BiomeScanner] '{manifest.biomeName}': +{newLayers} layer(s), +{newProps} prop(s), " +
-                      $"+{newTrees} tree(s), +{newRocks} rock(s).", manifest);
+                      $"+{newTrees} tree(s), +{newRocks} rock(s), +{newBuildings} building(s).", manifest);
+        }
+
+        /// <summary>Adds new prefabs from Buildings/ to the biome's village and enables it if any exist.</summary>
+        static int ScanBuildings(BiomeAssetManifest manifest, string dir)
+        {
+            if (!AssetDatabase.IsValidFolder(dir)) return 0;
+            var vs = manifest.village;
+            var list = new List<GameObject>(vs.buildingPrefabs ?? System.Array.Empty<GameObject>());
+            var existing = new HashSet<GameObject>(list);
+
+            int added = 0;
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { dir }).OrderBy(g => AssetDatabase.GUIDToAssetPath(g)))
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+                if (go == null || existing.Contains(go)) continue;
+                list.Add(go); existing.Add(go); added++;
+            }
+            vs.buildingPrefabs = list.ToArray();
+            if (vs.buildingPrefabs.Length > 0) vs.enabled = true;
+            return added;
         }
 
         static void EnsureFolder(string parent, string name)
