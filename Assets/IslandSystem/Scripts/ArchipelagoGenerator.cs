@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -6,27 +7,39 @@ using UnityEditor;
 namespace IslandSystem
 {
     /// <summary>
-    /// Spawns a small archipelago in the scene: N islands of one biome (different seeds) laid out in a
-    /// ring, plus an ocean plane. Built to run in the editor via the context menu / inspector button so
-    /// the generated <see cref="TerrainData"/> is saved as a persistent asset.
+    /// Spawns an archipelago in the scene: N islands scattered over a water field, each picking a biome
+    /// from <see cref="biomes"/> and a random size, plus an ocean plane. Placement is radius-aware so
+    /// islands of different sizes don't overlap. Built to run in the editor via the context menu /
+    /// inspector button so the generated <see cref="TerrainData"/> is saved as a persistent asset.
     /// </summary>
     public class ArchipelagoGenerator : MonoBehaviour
     {
-        [Header("Biome")]
+        [Header("Biomes")]
+        [Tooltip("Palette: each island randomly picks one of these. If empty, falls back to 'biome' below.")]
+        public List<BiomeAssetManifest> biomes = new List<BiomeAssetManifest>();
+        [Tooltip("Fallback biome used only when the palette above is empty.")]
         public BiomeAssetManifest biome;
 
         [Header("Layout")]
-        [Min(1)] public int islandCount = 3;
+        [Min(1)] public int islandCount = 5;
         public int baseSeed = 1000;
-        [Tooltip("Distance between island centers (units).")]
-        public float spacing = 400f;
+        [Tooltip("Islands are scattered within this radius around the origin.")]
+        public float fieldRadius = 1100f;
+        [Tooltip("Minimum open-water gap between island land edges (units).")]
+        public float minGap = 130f;
+
+        [Header("Size variation")]
+        [Tooltip("Per-island multiplier applied to the biome's terrainSize (x/z and height).")]
+        public Vector2 sizeMultiplierRange = new Vector2(0.65f, 1.5f);
+        [Tooltip("Fraction of the terrain tile that is actually land, used for spacing (~0.6 for falloff ~2).")]
+        [Range(0.3f, 1f)] public float landFraction = 0.62f;
 
         [Header("Ocean")]
         public Material waterMaterial;
-        [Tooltip("World Y of the sea surface. Islands sit on Y=0, so a small negative value reads as a beach.")]
-        public float waterLevel = -1f;
+        [Tooltip("World Y of the sea surface. Islands sit on Y=0, so a small positive value submerges the flat skirt.")]
+        public float waterLevel = 4f;
         [Tooltip("Side length of the ocean plane (units). A Unity plane is 10u, so scale = size / 10.")]
-        public float oceanSize = 4000f;
+        public float oceanSize = 4500f;
 
         [Header("Output")]
         [Tooltip("Folder where generated TerrainData assets are written (must exist).")]
@@ -34,50 +47,57 @@ namespace IslandSystem
 
         const string RootName = "Archipelago";
 
+        struct Placed { public Vector3 center; public float landRadius; }
+
         [ContextMenu("Generate")]
         public void Generate()
         {
-            if (biome == null)
+            var palette = BuildPalette();
+            if (palette.Count == 0)
             {
-                Debug.LogError("[Archipelago] No biome assigned.", this);
+                Debug.LogError("[Archipelago] No biomes assigned (palette and fallback are both empty).", this);
                 return;
             }
 
             Clear();
+            CleanGeneratedTerrain();
 
             var root = new GameObject(RootName).transform;
             root.SetParent(transform, false);
 
-            Vector3 size = biome.terrainSize;
-            // Center each island on its layout point by offsetting the terrain corner.
-            Vector3 cornerOffset = new Vector3(-size.x * 0.5f, 0f, -size.z * 0.5f);
-
             Material terrainMat = GetOrCreateTerrainMaterial();
+            var placed = new List<Placed>(islandCount);
 
             for (int i = 0; i < islandCount; i++)
             {
-                Vector3 center = LayoutPoint(i, islandCount, spacing);
                 int seed = baseSeed + i * 977;
+                var rng = new System.Random(seed);
 
-                TerrainData data = IslandTerrainGenerator.BuildTerrainData(biome, seed);
+                BiomeAssetManifest b = palette[rng.Next(palette.Count)];
+                float mult = Mathf.Lerp(sizeMultiplierRange.x, sizeMultiplierRange.y, (float)rng.NextDouble());
+                Vector3 size = Vector3.Scale(b.terrainSize, new Vector3(mult, mult, mult));
+
+                float landRadius = Mathf.Max(size.x, size.z) * 0.5f * landFraction;
+                Vector3 center = FindPlacement(rng, placed, landRadius);
+                placed.Add(new Placed { center = center, landRadius = landRadius });
+
+                TerrainData data = IslandTerrainGenerator.BuildTerrainData(b, seed, size);
                 data.name = $"Island_{i}_TerrainData";
 #if UNITY_EDITOR
-                // Deterministic path + overwrite so regenerating never leaks duplicate assets.
-                string path = $"{generatedFolder}/{biome.biomeName}_Island_{i}.asset";
-                if (AssetDatabase.LoadAssetAtPath<TerrainData>(path) != null)
-                    AssetDatabase.DeleteAsset(path);
+                string path = $"{generatedFolder}/Island_{i}.asset";
                 AssetDatabase.CreateAsset(data, path);
 #endif
 
                 GameObject terrainGO = Terrain.CreateTerrainGameObject(data);
-                terrainGO.name = $"Island_{i}";
+                terrainGO.name = $"Island_{i}_{b.biomeName}";
                 terrainGO.transform.SetParent(root, true);
-                terrainGO.transform.position = center + cornerOffset;
+                // Center the island tile on its placement point.
+                terrainGO.transform.position = center + new Vector3(-size.x * 0.5f, 0f, -size.z * 0.5f);
 
                 var terrain = terrainGO.GetComponent<Terrain>();
                 if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
-                IslandTerrainGenerator.ScatterProps(terrain, biome, seed);
+                IslandTerrainGenerator.ScatterObjects(terrain, b, seed);
             }
 
             CreateOcean(root);
@@ -85,7 +105,7 @@ namespace IslandSystem
 #if UNITY_EDITOR
             AssetDatabase.SaveAssets();
 #endif
-            Debug.Log($"[Archipelago] Generated {islandCount} island(s) of biome '{biome.biomeName}'.", this);
+            Debug.Log($"[Archipelago] Generated {islandCount} island(s) from {palette.Count} biome(s).", this);
         }
 
         [ContextMenu("Clear")]
@@ -102,15 +122,52 @@ namespace IslandSystem
             }
         }
 
-        /// <summary>Positions on a circle (single island -> origin) so islands sit in a clean ring.</summary>
-        static Vector3 LayoutPoint(int index, int count, float spacing)
+        // ---- Biome palette -----------------------------------------------
+
+        List<BiomeAssetManifest> BuildPalette()
         {
-            if (count <= 1) return Vector3.zero;
-            // Radius so neighbour-to-neighbour chord ~= spacing.
-            float radius = spacing / (2f * Mathf.Sin(Mathf.PI / count));
-            float ang = (Mathf.PI * 2f / count) * index;
-            return new Vector3(Mathf.Cos(ang) * radius, 0f, Mathf.Sin(ang) * radius);
+            var palette = new List<BiomeAssetManifest>();
+            if (biomes != null)
+                foreach (var b in biomes)
+                    if (b != null) palette.Add(b);
+            if (palette.Count == 0 && biome != null) palette.Add(biome);
+            return palette;
         }
+
+        // ---- Placement ----------------------------------------------------
+
+        /// <summary>
+        /// Rejection-samples a point inside the field disk that keeps <paramref name="landRadius"/> clear
+        /// of every already-placed island (plus <see cref="minGap"/>). If it can't fit after many tries,
+        /// it pushes the island out past the field so it never overlaps.
+        /// </summary>
+        Vector3 FindPlacement(System.Random rng, List<Placed> placed, float landRadius)
+        {
+            const int attempts = 256;
+            for (int a = 0; a < attempts; a++)
+            {
+                float r = fieldRadius * Mathf.Sqrt((float)rng.NextDouble());
+                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                Vector3 c = new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+
+                bool ok = true;
+                foreach (var p in placed)
+                {
+                    if (Vector3.Distance(c, p.center) < landRadius + p.landRadius + minGap) { ok = false; break; }
+                }
+                if (ok) return c;
+            }
+
+            // Fallback: place it on a ring beyond everything currently placed.
+            float maxReach = fieldRadius;
+            foreach (var p in placed)
+                maxReach = Mathf.Max(maxReach, new Vector2(p.center.x, p.center.z).magnitude + p.landRadius);
+            float outAng = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float outR = maxReach + landRadius + minGap;
+            return new Vector3(Mathf.Cos(outAng) * outR, 0f, Mathf.Sin(outAng) * outR);
+        }
+
+        // ---- Ocean & assets ----------------------------------------------
 
         void CreateOcean(Transform root)
         {
@@ -134,6 +191,15 @@ namespace IslandSystem
                 renderer.sharedMaterial = stub;
                 Debug.LogWarning("[Archipelago] No water material assigned; using a blue URP-lit stub.", this);
             }
+        }
+
+        void CleanGeneratedTerrain()
+        {
+#if UNITY_EDITOR
+            // Delete previously generated TerrainData so changing islandCount/biomes never leaks assets.
+            foreach (var guid in AssetDatabase.FindAssets("t:TerrainData", new[] { generatedFolder }))
+                AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
+#endif
         }
 
         Material GetOrCreateTerrainMaterial()

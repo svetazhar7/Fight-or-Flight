@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 61a816060dae2b445bf7d28871b3a6ac, type: 3}
-  m_Name: Desert_GrandCanyon
+  m_Name: Tropical_Volcano
   m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.BiomeAssetManifest
-  biomeName: Desert_GrandCanyon
-  climateZone: 2
-  islandType: 0
+  biomeName: Tropical_Volcano
+  climateZone: 0
+  islandType: 2
   noiseSettings:
-    frequency: 3
+    frequency: 2.4
     amplitude: 1
     octaves: 5
-  heightProfile: 2
-  terraceSteps: 10
+  heightProfile: 1
+  terraceSteps: 8
   heightCurve:
     serializedVersion: 2
     m_Curve:
@@ -34,17 +34,8 @@ MonoBehaviour:
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.25
-      value: 0.2
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
       time: 0.5
-      value: 0.52
+      value: 0.42
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -52,8 +43,8 @@ MonoBehaviour:
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.75
-      value: 0.82
+      time: 0.8
+      value: 0.78
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -72,8 +63,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  islandFalloff: 2.1
+  islandFalloff: 2.8
   heightmapResolution: 513
-  terrainSize: {x: 500, y: 150, z: 500}
+  terrainSize: {x: 460, y: 200, z: 460}
   textureLayers: []
   spawnRules: []
