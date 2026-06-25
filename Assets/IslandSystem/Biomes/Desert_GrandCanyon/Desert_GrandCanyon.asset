@@ -15,6 +15,10 @@ MonoBehaviour:
   biomeName: Desert_GrandCanyon
   climateZone: 1
   islandType: 13
+  displayName: 
+  elevationOrder: 0.5
+  reliefStrength: 0.5
+  debugColor: {r: 0.7, g: 0.7, b: 0.7, a: 1}
   noiseSettings:
     frequency: 3
     amplitude: 1

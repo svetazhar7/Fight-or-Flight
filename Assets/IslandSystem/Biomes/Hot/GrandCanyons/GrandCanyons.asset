@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96fa66e2bbefccb45889c5ab936cbb9f, type: 3}
+  m_Name: GrandCanyons
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.IslandTypeDefinition
+  displayName: "\u041A\u0430\u043D\u044C\u043E\u043D\u044B"
+  climateZone: 1
+  islandType: 13
+  noiseSettings:
+    frequency: 3
+    amplitude: 1
+    octaves: 5
+  heightProfile: 2
+  terraceSteps: 10
+  heightCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  islandFalloff: 2.3
+  heightmapResolution: 513
+  terrainSize: {x: 520, y: 160, z: 520}
+  biomes:
+  - biome: {fileID: 11400000, guid: 995a6ab0356308840a262344a3d445cf, type: 2}
+    percent: 10
+  - biome: {fileID: 11400000, guid: 89342c235837a6149adf87573cba93bc, type: 2}
+    percent: 50
+  - biome: {fileID: 11400000, guid: fa3d669898a361245867e6d01e7ddf43, type: 2}
+    percent: 40

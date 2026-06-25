@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96fa66e2bbefccb45889c5ab936cbb9f, type: 3}
+  m_Name: EuropeanCountryside
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.IslandTypeDefinition
+  displayName: "\u0415\u0432\u0440\u043E\u043F\u0435\u0439\u0441\u043A\u0430\u044F
+    \u0441\u0435\u043B\u044C\u0441\u043A\u0430\u044F \u043C\u0435\u0441\u0442\u043D\u043E\u0441\u0442\u044C"
+  climateZone: 2
+  islandType: 18
+  noiseSettings:
+    frequency: 3
+    amplitude: 1
+    octaves: 5
+  heightProfile: 0
+  terraceSteps: 8
+  heightCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  islandFalloff: 2.1
+  heightmapResolution: 513
+  terrainSize: {x: 520, y: 130, z: 520}
+  biomes:
+  - biome: {fileID: 11400000, guid: 2104fc977b6968c4581241ea92117ced, type: 2}
+    percent: 10
+  - biome: {fileID: 11400000, guid: f6a3652ac07376e42bae8697ffdabb5c, type: 2}
+    percent: 10
+  - biome: {fileID: 11400000, guid: de52f4b27fe3c3f4bad6852a51712169, type: 2}
+    percent: 20
+  - biome: {fileID: 11400000, guid: c6b238806d3ac9243b004c050f46688e, type: 2}
+    percent: 60

@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96fa66e2bbefccb45889c5ab936cbb9f, type: 3}
+  m_Name: RedRockBadlands
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.IslandTypeDefinition
+  displayName: "\u041A\u0440\u0430\u0441\u043D\u044B\u0435 \u0441\u043A\u0430\u043B\u044B"
+  climateZone: 1
+  islandType: 15
+  noiseSettings:
+    frequency: 3
+    amplitude: 1
+    octaves: 5
+  heightProfile: 1
+  terraceSteps: 8
+  heightCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  islandFalloff: 2.7
+  heightmapResolution: 513
+  terrainSize: {x: 500, y: 190, z: 500}
+  biomes:
+  - biome: {fileID: 11400000, guid: e8c11526efc8e134787bb9b48bd8aadc, type: 2}
+    percent: 10
+  - biome: {fileID: 11400000, guid: d1417145b3a76604790d702c5241ba00, type: 2}
+    percent: 90

@@ -153,7 +153,18 @@ namespace IslandSystem
         [Header("Identity")]
         public string biomeName = "Desert_GrandCanyon";
         public ClimateZone climateZone = ClimateZone.Hot;
+        [Tooltip("Which island type this zone belongs to (a biome is unique per island type).")]
         public IslandType islandType = IslandType.GrandCanyons;
+
+        [Header("Zone character (as an island sub-biome)")]
+        [Tooltip("Human-readable name, e.g. \"Пляж\". Falls back to biomeName if empty.")]
+        public string displayName;
+        [Tooltip("Where this zone sits on an island: 0 = shoreline, 1 = peaks. Orders the biome bands.")]
+        [Range(0f, 1f)] public float elevationOrder = 0.5f;
+        [Tooltip("Local ruggedness hint: plains low, hills/mountains high. (Reserved for relief shaping.)")]
+        [Range(0f, 1f)] public float reliefStrength = 0.5f;
+        [Tooltip("Preview colour used by the generator until real textures are scanned in.")]
+        public Color debugColor = new Color(0.7f, 0.7f, 0.7f, 1f);
 
         [Header("Height — noise")]
         public NoiseSettings noiseSettings = NoiseSettings.Default;
