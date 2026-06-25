@@ -147,13 +147,13 @@ namespace IslandSystem
         /// splats — the cause of the "all beach" bug).
         /// </summary>
         public static void PopulateIslandFromType(TerrainData data, IslandTypeDefinition def, int seed,
-            Vector3 size, float waterlineNormalized, out List<BiomeBand> bands)
+            Vector3 size, float waterlineNormalized, out List<BiomeBand> bands, int resolutionOverride = 0)
         {
             bands = new List<BiomeBand>();
 
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
-            int hmRes = Mathf.Max(33, def.heightmapResolution);
+            int hmRes = Mathf.Max(33, resolutionOverride > 0 ? resolutionOverride : def.heightmapResolution);
             float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
                 def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
 
