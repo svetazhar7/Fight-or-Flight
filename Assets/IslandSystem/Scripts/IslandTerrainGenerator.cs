@@ -151,16 +151,11 @@ namespace IslandSystem
         {
             bands = new List<BiomeBand>();
 
-            data.heightmapResolution = Mathf.Max(33, def.heightmapResolution);
-            data.size = size;
-            data.alphamapResolution = 256;
-
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
-            int hmRes = data.heightmapResolution;
+            int hmRes = Mathf.Max(33, def.heightmapResolution);
             float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
                 def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
-            data.SetHeights(0, 0, heights);
 
             // Valid biomes, sorted low -> high.
             var entries = new List<WeightedBiome>();
@@ -196,17 +191,17 @@ namespace IslandSystem
             for (int k = 1; k <= n; k++)
                 if (edges[k] < edges[k - 1]) edges[k] = edges[k - 1]; // keep monotonic
 
-            // Terrain layers + band records.
+            // Terrain layers + band records. (GetBiomeLayer may create debug-layer ASSETS, which can revert
+            // the not-yet-saved TerrainData asset — so we configure `data` only AFTER this, at the very end.)
             var layers = new TerrainLayer[n];
             for (int k = 0; k < n; k++)
             {
                 layers[k] = GetBiomeLayer(entries[k].biome);
                 bands.Add(new BiomeBand { biome = entries[k].biome, lo = edges[k], hi = edges[k + 1] });
             }
-            data.terrainLayers = layers;
 
             // Paint splatmap by band with soft edges.
-            int aw = data.alphamapResolution;
+            const int aw = 256;
             var maps = new float[aw, aw, n];
             const float blend = 0.03f;
             for (int y = 0; y < aw; y++)
@@ -215,7 +210,7 @@ namespace IslandSystem
                 {
                     float nx = (float)x / (aw - 1);
                     float ny = (float)y / (aw - 1);
-                    float h = data.GetInterpolatedHeight(nx, ny) / Mathf.Max(0.0001f, data.size.y);
+                    float h = SampleGrid(heights, nx, ny); // height (already normalized 0..1)
 
                     // Cumulative band membership: weight_k = (fraction at/above edge[k]) - (… above edge[k+1]).
                     // This telescopes to a partition of unity, so cells sitting exactly on an edge split
@@ -233,7 +228,28 @@ namespace IslandSystem
                     else maps[y, x, 0] = 1f;
                 }
             }
+            // Configure the TerrainData and commit LAST — after all AssetDatabase writes above — so the
+            // unsaved asset isn't reverted to its on-disk (default) resolution mid-build.
+            data.heightmapResolution = hmRes;
+            data.size = size;
+            data.alphamapResolution = aw;
+            data.terrainLayers = layers;
+            data.SetHeights(0, 0, heights);
             data.SetAlphamaps(0, 0, maps);
+        }
+
+        /// <summary>Bilinear sample of a normalized height grid (indexed [y, x]) at tile coords u,v in 0..1.</summary>
+        static float SampleGrid(float[,] g, float u, float v)
+        {
+            int res = g.GetLength(0);
+            float fx = Mathf.Clamp01(u) * (res - 1);
+            float fy = Mathf.Clamp01(v) * (res - 1);
+            int x0 = (int)fx, y0 = (int)fy;
+            int x1 = Mathf.Min(x0 + 1, res - 1), y1 = Mathf.Min(y0 + 1, res - 1);
+            float tx = fx - x0, ty = fy - y0;
+            float a = Mathf.Lerp(g[y0, x0], g[y0, x1], tx);
+            float b = Mathf.Lerp(g[y1, x0], g[y1, x1], tx);
+            return Mathf.Lerp(a, b, ty);
         }
 
         /// <summary>Smooth cumulative weight at/above edge <paramref name="e"/>: 0.5 at h==e, →1 above, →0 below.</summary>

@@ -19,6 +19,12 @@ MonoBehaviour:
   elevationOrder: 0.15
   reliefStrength: 0.05
   debugColor: {r: 0.3, g: 0.65, b: 0.7, a: 1}
+  carves: 1
+  carvePattern: 0
+  carveDepth: 0.2
+  carveCoverage: 0.55
+  carveScale: 5
+  fillsWithWater: 1
   noiseSettings:
     frequency: 3
     amplitude: 1
