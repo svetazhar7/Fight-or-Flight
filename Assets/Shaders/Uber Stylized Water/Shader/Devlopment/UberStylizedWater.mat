@@ -27,10 +27,7 @@ Material:
   m_ValidKeywords:
   - _ENABLENORMAL
   - _ENABLEPLANERREFLECTION
-  m_InvalidKeywords:
-  - _ENABLEUNDERWATERLAYER
-  - _SURFACE_TYPE_TRANSPARENT
-  - _WORLDSPACEDEPTH
+  m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
