@@ -40,6 +40,13 @@ namespace IslandSystem
         [Tooltip("Side length of the ocean plane (units). A Unity plane is 10u, so scale = size / 10.")]
         public float oceanSize = 4500f;
 
+        [Header("Seabed")]
+        [Tooltip("Adds a floor under the water so open ocean isn't a void (and the toon water has depth to read).")]
+        public bool createSeabed = true;
+        public Material seabedMaterial;
+        [Tooltip("World Y of the seabed plane. Below the islands' Y=0 base and the water surface.")]
+        public float seabedLevel = -1f;
+
         [Header("Output")]
         [Tooltip("Folder where generated TerrainData assets are written (must exist).")]
         public string generatedFolder = "Assets/IslandSystem/Generated";
@@ -100,6 +107,7 @@ namespace IslandSystem
                 IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands);
             }
 
+            if (createSeabed) CreateSeabed(root);
             CreateOcean(root);
 
 #if UNITY_EDITOR
@@ -165,6 +173,29 @@ namespace IslandSystem
         }
 
         // ---- Ocean & assets ----------------------------------------------
+
+        void CreateSeabed(Transform root)
+        {
+            var bed = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            bed.name = "Seabed";
+            bed.transform.SetParent(root, true);
+            bed.transform.position = new Vector3(0f, seabedLevel, 0f);
+            // A touch larger than the ocean so there's no visible gap at the horizon.
+            bed.transform.localScale = new Vector3(oceanSize / 10f * 1.1f, 1f, oceanSize / 10f * 1.1f);
+
+            var renderer = bed.GetComponent<Renderer>();
+            if (seabedMaterial != null)
+            {
+                renderer.sharedMaterial = seabedMaterial;
+            }
+            else
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                var stub = new Material(shader) { name = "SeabedStub" };
+                stub.color = new Color(0.40f, 0.36f, 0.27f, 1f); // muted sandy floor
+                renderer.sharedMaterial = stub;
+            }
+        }
 
         void CreateOcean(Transform root)
         {
