@@ -347,7 +347,10 @@ namespace IslandSystem
 
         // ---- Object scatter ----------------------------------------------
 
-        /// <summary>Scatters each composed biome's spawn rules, confined to that biome's elevation band.</summary>
+        /// <summary>Normalized height below which a cell is the island's fade-to-sea zone (no objects there).</summary>
+        const float FadeThreshold = 0.05f;
+
+        /// <summary>Scatters each composed biome's generic prop rules (Props/) as GameObjects, per band.</summary>
         public static void ScatterCompositionObjects(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
         {
             if (bands == null) return;
@@ -356,12 +359,101 @@ namespace IslandSystem
             {
                 bi++;
                 if (band.biome == null || band.biome.spawnRules == null || band.biome.spawnRules.Count == 0) continue;
-                ScatterRuleList(terrain, band.biome.spawnRules, seed + bi * 101, band.lo, band.hi);
+                ScatterRuleList(terrain, band.biome.spawnRules, seed + bi * 101, band.lo, band.hi, "Spawned");
             }
         }
 
-        /// <summary>Places a list of spawn rules, gating each instance to the [bandLo, bandHi] height window.</summary>
-        static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi)
+        /// <summary>Scatters each composed biome's ROCK rules (Rocks/) as GameObjects under a "Rocks" holder.</summary>
+        public static void ScatterRocks(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
+        {
+            if (bands == null) return;
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                if (band.biome == null || band.biome.rockRules == null || band.biome.rockRules.Count == 0) continue;
+                ScatterRuleList(terrain, band.biome.rockRules, seed + bi * 101, band.lo, band.hi, "Rocks");
+            }
+        }
+
+        /// <summary>
+        /// Registers the biomes' tree prefabs (Trees/) as <see cref="TreePrototype"/>s and places them as
+        /// Unity Terrain tree instances — each confined to its biome's elevation band, off the fade zone and
+        /// off slopes the rule's condition rejects. Uses the island <paramref name="seed"/> for determinism.
+        /// </summary>
+        public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands)
+        {
+            var data = terrain.terrainData;
+            if (bands == null) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); return; }
+
+            // Collect unique tree prefabs across all biomes -> prototypes.
+            var prototypes = new List<TreePrototype>();
+            var protoIndex = new Dictionary<GameObject, int>();
+            foreach (var band in bands)
+            {
+                if (band.biome == null || band.biome.treeRules == null) continue;
+                foreach (var rule in band.biome.treeRules)
+                {
+                    if (rule == null || rule.prefabs == null) continue;
+                    foreach (var p in rule.prefabs)
+                        if (p != null && !protoIndex.ContainsKey(p))
+                        {
+                            protoIndex[p] = prototypes.Count;
+                            prototypes.Add(new TreePrototype { prefab = p });
+                        }
+                }
+            }
+            data.treePrototypes = prototypes.ToArray();
+            if (prototypes.Count == 0) { data.SetTreeInstances(new TreeInstance[0], true); return; }
+
+            var instances = new List<TreeInstance>();
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                if (band.biome == null || band.biome.treeRules == null) continue;
+                int ruleIndex = 0;
+                foreach (var rule in band.biome.treeRules)
+                {
+                    ruleIndex++;
+                    if (rule == null || !rule.IsValid) continue;
+                    var rng = new System.Random((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663);
+                    int placed = 0, guard = rule.count * 12;
+                    while (placed < rule.count && guard-- > 0)
+                    {
+                        float u = (float)rng.NextDouble();
+                        float v = (float)rng.NextDouble();
+                        float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
+                        if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
+                        float slopeDeg = data.GetSteepness(u, v);
+                        if (ConditionWeight(rule.where, height01, slopeDeg) <= 0.001f) continue;
+
+                        var prefab = rule.prefabs[rng.Next(rule.prefabs.Length)];
+                        if (prefab == null || !protoIndex.TryGetValue(prefab, out int pi)) continue;
+
+                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        instances.Add(new TreeInstance
+                        {
+                            position = new Vector3(u, height01, v), // normalized; snapped to heightmap below
+                            prototypeIndex = pi,
+                            widthScale = s,
+                            heightScale = s,
+                            rotation = rule.randomYRotation ? (float)rng.NextDouble() * Mathf.PI * 2f : 0f,
+                            color = Color.white,
+                            lightmapColor = Color.white
+                        });
+                        placed++;
+                    }
+                }
+            }
+            data.SetTreeInstances(instances.ToArray(), true);
+        }
+
+        /// <summary>
+        /// Places spawn rules as GameObjects under <paramref name="holderName"/>, gating each instance to the
+        /// [bandLo, bandHi] height window and off the fade zone. Supports per-axis scale and normal alignment.
+        /// </summary>
+        static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi, string holderName)
         {
             var data = terrain.terrainData;
             Vector3 origin = terrain.transform.position;
@@ -375,10 +467,10 @@ namespace IslandSystem
 
                 if (holder == null)
                 {
-                    holder = terrain.transform.Find("Spawned");
+                    holder = terrain.transform.Find(holderName);
                     if (holder == null)
                     {
-                        holder = new GameObject("Spawned").transform;
+                        holder = new GameObject(holderName).transform;
                         holder.SetParent(terrain.transform, false);
                     }
                 }
@@ -391,7 +483,7 @@ namespace IslandSystem
                     float v = (float)rng.NextDouble();
 
                     float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                    if (height01 < bandLo || height01 > bandHi) continue;
+                    if (height01 < FadeThreshold || height01 < bandLo || height01 > bandHi) continue;
                     float slopeDeg = data.GetSteepness(u, v);
                     if (ConditionWeight(rule.where, height01, slopeDeg) <= 0.001f) continue;
 
@@ -417,8 +509,20 @@ namespace IslandSystem
                         rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
                     go.transform.rotation = rot;
 
-                    float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                    if (s > 0f) go.transform.localScale = go.transform.localScale * s;
+                    Vector3 baseScale = go.transform.localScale;
+                    if (rule.nonUniformScale)
+                    {
+                        // Independent X/Y/Z scale so rocks look uneven.
+                        float sx = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        float sy = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        float sz = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        go.transform.localScale = Vector3.Scale(baseScale, new Vector3(sx, sy, sz));
+                    }
+                    else
+                    {
+                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        if (s > 0f) go.transform.localScale = baseScale * s;
+                    }
 
                     placed++;
                 }

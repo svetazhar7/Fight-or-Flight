@@ -188,9 +188,12 @@ namespace IslandSystem
             go.transform.position = center + new Vector3(-size.x * 0.5f, 0f, -size.z * 0.5f);
 
             var terrain = go.GetComponent<Terrain>();
+            terrain.allowAutoConnect = false; // islands are independent; avoids "different heightmap resolution" spam
             if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
             IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands);
+            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands);   // Unity Terrain tree instances
+            IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands); // rock GameObjects
 
             var marker = go.AddComponent<IslandMarker>();
             marker.isHub = isHub;

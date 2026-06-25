@@ -54,3 +54,5 @@ MonoBehaviour:
   terrainSize: {x: 500, y: 150, z: 500}
   textureLayers: []
   spawnRules: []
+  treeRules: []
+  rockRules: []

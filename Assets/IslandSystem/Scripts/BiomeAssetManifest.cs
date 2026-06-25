@@ -137,6 +137,8 @@ namespace IslandSystem
         public bool alignToNormal = false;
         [Tooltip("Push the object down into the ground so it doesn't float (world units).")]
         public float sink = 0f;
+        [Tooltip("Scale each axis (X/Y/Z) independently within scaleRange for an uneven look. Used by rocks.")]
+        public bool nonUniformScale = false;
 
         public bool IsValid => prefabs != null && prefabs.Length > 0 && count > 0;
     }
@@ -187,8 +189,14 @@ namespace IslandSystem
         [Header("Texturing — condition-driven layers")]
         public List<BiomeTextureLayer> textureLayers = new List<BiomeTextureLayer>();
 
-        [Header("Objects — condition-driven spawn rules")]
+        [Header("Objects — condition-driven spawn rules (from Props/)")]
         public List<ObjectSpawnRule> spawnRules = new List<ObjectSpawnRule>();
+
+        [Header("Trees — Unity Terrain tree instances (from Trees/)")]
+        public List<ObjectSpawnRule> treeRules = new List<ObjectSpawnRule>();
+
+        [Header("Rocks — GameObjects with per-axis scale (from Rocks/)")]
+        public List<ObjectSpawnRule> rockRules = new List<ObjectSpawnRule>();
 
         /// <summary>The non-null TerrainLayers in author order — this is what the TerrainData uses.</summary>
         public TerrainLayer[] CollectTerrainLayers()

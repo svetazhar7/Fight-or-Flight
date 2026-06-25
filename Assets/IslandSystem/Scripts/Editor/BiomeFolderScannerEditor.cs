@@ -24,10 +24,10 @@ namespace IslandSystem.EditorTools
             var manifest = (BiomeAssetManifest)target;
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "Drop ground/cliff textures into 'Textures/' and prop prefabs into 'Props/' next to this " +
-                "asset, then press the button. New textures become condition-driven layers and new prefabs " +
-                "become spawn rules; anything already configured here is kept. After scanning, press " +
-                "Generate on the ArchipelagoGenerator to rebake.",
+                "Drop assets next to this manifest: textures → 'Textures/', props → 'Props/', tree prefabs → " +
+                "'Trees/' (Unity Terrain trees), rock prefabs → 'Rocks/' (GameObjects). Press the button: new " +
+                "assets become condition-driven rules; anything already tuned here is kept. After scanning, " +
+                "press Generate on the ArchipelagoGenerator to rebake.",
                 MessageType.Info);
 
             if (GUILayout.Button("Scan Biome Folder", GUILayout.Height(30)))
@@ -38,22 +38,53 @@ namespace IslandSystem.EditorTools
         {
             string manifestPath = AssetDatabase.GetAssetPath(manifest);
             string biomeDir = Path.GetDirectoryName(manifestPath).Replace("\\", "/");
-            string texDir = biomeDir + "/Textures";
-            string propDir = biomeDir + "/Props";
             string layerDir = biomeDir + "/Layers";
+
+            EnsureFolder(biomeDir, "Trees");
+            EnsureFolder(biomeDir, "Rocks");
 
             Undo.RecordObject(manifest, "Scan Biome Folder");
 
-            int newLayers = ScanTextures(manifest, texDir, layerDir);
-            int newRules = ScanProps(manifest, propDir);
+            manifest.spawnRules ??= new List<ObjectSpawnRule>();
+            manifest.treeRules ??= new List<ObjectSpawnRule>();
+            manifest.rockRules ??= new List<ObjectSpawnRule>();
+
+            int newLayers = ScanTextures(manifest, biomeDir + "/Textures", layerDir);
+
+            int newProps = ScanRules(biomeDir + "/Props", manifest.spawnRules, go => new ObjectSpawnRule
+            {
+                label = go.name, prefabs = new[] { go }, count = 40,
+                where = PlacementCondition.Range(0.12f, 0.9f, 0f, 28f),
+                scaleRange = new Vector2(0.85f, 1.25f), randomYRotation = true
+            });
+
+            int newTrees = ScanRules(biomeDir + "/Trees", manifest.treeRules, go => new ObjectSpawnRule
+            {
+                label = go.name, prefabs = new[] { go }, count = 150,
+                where = PlacementCondition.Range(0.1f, 0.85f, 0f, 25f),   // trees on gentle ground
+                scaleRange = new Vector2(0.8f, 1.3f), randomYRotation = true
+            });
+
+            int newRocks = ScanRules(biomeDir + "/Rocks", manifest.rockRules, go => new ObjectSpawnRule
+            {
+                label = go.name, prefabs = new[] { go }, count = 40,
+                where = PlacementCondition.Range(0.1f, 0.95f, 12f, 55f),  // rocks gravitate to slopes
+                scaleRange = new Vector2(0.6f, 1.5f), randomYRotation = true,
+                alignToNormal = true, nonUniformScale = true
+            });
 
             EditorUtility.SetDirty(manifest);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[BiomeScanner] '{manifest.biomeName}': +{newLayers} texture layer(s) " +
-                      $"({manifest.textureLayers.Count} total), +{newRules} spawn rule(s) " +
-                      $"({manifest.spawnRules.Count} total).", manifest);
+            Debug.Log($"[BiomeScanner] '{manifest.biomeName}': +{newLayers} layer(s), +{newProps} prop(s), " +
+                      $"+{newTrees} tree(s), +{newRocks} rock(s).", manifest);
+        }
+
+        static void EnsureFolder(string parent, string name)
+        {
+            if (!AssetDatabase.IsValidFolder(parent + "/" + name))
+                AssetDatabase.CreateFolder(parent, name);
         }
 
         // ---- Textures -> condition-driven layers --------------------------
@@ -143,36 +174,28 @@ namespace IslandSystem.EditorTools
         static bool IsEverywhere(PlacementCondition c)
             => c.minHeight <= 0f && c.maxHeight >= 1f && c.minSlope <= 0f && c.maxSlope >= 90f;
 
-        // ---- Props -> spawn rules -----------------------------------------
+        // ---- Prefab folder -> spawn rules ---------------------------------
 
-        static int ScanProps(BiomeAssetManifest manifest, string propDir)
+        /// <summary>
+        /// Adds one rule per NEW prefab found in <paramref name="dir"/> (built by <paramref name="make"/>),
+        /// skipping prefabs already referenced by an existing rule so tuning is preserved. Returns count added.
+        /// </summary>
+        static int ScanRules(string dir, List<ObjectSpawnRule> rules, System.Func<GameObject, ObjectSpawnRule> make)
         {
-            if (!AssetDatabase.IsValidFolder(propDir)) return 0;
+            if (!AssetDatabase.IsValidFolder(dir)) return 0;
 
-            manifest.spawnRules ??= new List<ObjectSpawnRule>();
             var referenced = new HashSet<GameObject>();
-            foreach (var r in manifest.spawnRules)
+            foreach (var r in rules)
                 if (r?.prefabs != null)
                     foreach (var p in r.prefabs)
                         if (p != null) referenced.Add(p);
 
             int added = 0;
-            var prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { propDir });
-            foreach (var guid in prefabGuids.OrderBy(g => AssetDatabase.GUIDToAssetPath(g)))
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { dir }).OrderBy(g => AssetDatabase.GUIDToAssetPath(g)))
             {
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
                 if (go == null || referenced.Contains(go)) continue;
-
-                // One rule per prefab so each object type gets its own conditions.
-                manifest.spawnRules.Add(new ObjectSpawnRule
-                {
-                    label = go.name,
-                    prefabs = new[] { go },
-                    count = 40,
-                    where = PlacementCondition.Range(0.12f, 0.9f, 0f, 28f),
-                    scaleRange = new Vector2(0.85f, 1.25f),
-                    randomYRotation = true
-                });
+                rules.Add(make(go));
                 referenced.Add(go);
                 added++;
             }
