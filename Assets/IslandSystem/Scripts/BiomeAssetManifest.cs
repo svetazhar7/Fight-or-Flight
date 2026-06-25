@@ -4,11 +4,49 @@ using UnityEngine;
 
 namespace IslandSystem
 {
-    /// <summary>Broad climate band of a biome. Used to group islands across the archipelago.</summary>
-    public enum ClimateZone { Tropical, Temperate, Arid, Polar, Volcanic }
+    /// <summary>Broad climate band an island belongs to. Each <see cref="IslandType"/> lives in one zone.</summary>
+    public enum ClimateZone { Cold, Hot, Temperate, Tropical }
 
-    /// <summary>Macro silhouette / landform style of an island.</summary>
-    public enum IslandType { GrandCanyon, Atoll, Volcano, Plateau, Mountainous, Archipelago }
+    /// <summary>
+    /// Landform / theme of an island, grouped by the <see cref="ClimateZone"/> it belongs to. These are
+    /// island TYPES (the kind of place), not biomes — a biome (template) references one of these as a tag.
+    /// See <see cref="IslandTaxonomy"/> for the climate-of / types-in / display-name mappings.
+    /// </summary>
+    public enum IslandType
+    {
+        // --- Cold ---
+        PolarArchipelago,   // Полярный архипелаг
+        PolarCanyons,       // Ледяные каньоны
+        GlacialCoast,       // Ледниковое побережье
+        BorealTaiga,        // Хвойная тайга
+        Tundra,             // Тундровые острова
+        GlacierHighlands,   // Горные ледники
+
+        // --- Tropical ---
+        ParadiseIslands,    // Райские острова
+        MangroveCoast,      // Мангровое побережье
+        TropicalHighlands,  // Тропические нагорья
+        BambooIsles,        // Бамбуковые острова
+        RockyTropicalCoast, // Скалистые тропические берега
+        RainforestIslands,  // Дождевые леса
+
+        // --- Hot ---
+        ClassicDesert,      // Классическая пустыня
+        GrandCanyons,       // Каньоны
+        WildWest,           // Дикий Запад
+        RedRockBadlands,    // Красные скалы
+        LavaWastelands,     // Лавовые пустоши
+        RockPlateau,        // Каменистое плато
+
+        // --- Temperate ---
+        EuropeanCountryside,  // Европейская сельская местность
+        SlavicWilderness,     // Славянская глубинка
+        LakeDistrict,         // Озёрный край
+        RollingHighlands,     // Холмистые острова
+        MountainValleys,      // Горные долины
+        ConiferousArchipelago,// Хвойный архипелаг
+        MixedWoodlands        // Смешанные леса
+    }
 
     /// <summary>How the raw noise is shaped into elevation.</summary>
     public enum HeightProfileMode
@@ -114,8 +152,8 @@ namespace IslandSystem
     {
         [Header("Identity")]
         public string biomeName = "Desert_GrandCanyon";
-        public ClimateZone climateZone = ClimateZone.Arid;
-        public IslandType islandType = IslandType.GrandCanyon;
+        public ClimateZone climateZone = ClimateZone.Hot;
+        public IslandType islandType = IslandType.GrandCanyons;
 
         [Header("Height — noise")]
         public NoiseSettings noiseSettings = NoiseSettings.Default;

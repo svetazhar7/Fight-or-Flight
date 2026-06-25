@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Tropical_Volcano
   m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.BiomeAssetManifest
   biomeName: Tropical_Volcano
-  climateZone: 0
-  islandType: 2
+  climateZone: 3
+  islandType: 8
   noiseSettings:
     frequency: 2.4
     amplitude: 1

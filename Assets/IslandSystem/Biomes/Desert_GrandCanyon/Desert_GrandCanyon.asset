@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Desert_GrandCanyon
   m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.BiomeAssetManifest
   biomeName: Desert_GrandCanyon
-  climateZone: 2
-  islandType: 0
+  climateZone: 1
+  islandType: 13
   noiseSettings:
     frequency: 3
     amplitude: 1
