@@ -20,11 +20,11 @@ RenderSettings:
   m_FogDensity: 0.0003
   m_LinearFogStart: 1200
   m_LinearFogEnd: 5000
-  m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
-  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
-  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientSkyColor: {r: 0.63919544, g: 0.9581202, b: 1.018868, a: 1.5}
+  m_AmbientEquatorColor: {r: 0.63583124, g: 0.8300802, b: 0.9169811, a: 1.3499999}
+  m_AmbientGroundColor: {r: 0.31791562, g: 0.4150401, b: 0.45849055, a: 1.3499999}
   m_AmbientIntensity: 1
-  m_AmbientMode: 0
+  m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
   m_HaloStrength: 0.5
@@ -32,12 +32,12 @@ RenderSettings:
   m_FlareFadeSpeed: 3
   m_HaloTexture: {fileID: 0}
   m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
-  m_DefaultReflectionMode: 0
+  m_DefaultReflectionMode: 1
   m_DefaultReflectionResolution: 128
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 0}
+  m_Sun: {fileID: 1027427279}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -379,6 +379,168 @@ Transform:
   - {fileID: 1136921301}
   m_Father: {fileID: 1198871377}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &1027427276
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 510582517403770384, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: satHolder
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770387, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: biomes.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: cumulus
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: borderEffect
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770390, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: biomes.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066749842676577, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 635.2577
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066749842676577, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 635.2577
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066749842676577, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 635.2577
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693060, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_Name
+      value: Cozy Weather Sphere
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: cozyCamera
+      value: 
+      objectReference: {fileID: 1430116131}
+    - target: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: modules.Array.size
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: systems.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: 'modules.Array.data[9]'
+      value: 
+      objectReference: {fileID: 1027427280}
+    - target: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: ambientLightZenithColor.g
+      value: 0.63874686
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 41.983643
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 202.23553
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -189.00706
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.0000000037252899
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.0000000074505797
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7481130337564779861, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8963686766640408568, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1027427280}
+  m_SourcePrefab: {fileID: 100100000, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+--- !u!114 &1027427277 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6948066750454693061, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+  m_PrefabInstance: {fileID: 1027427276}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d17adf51a847d5a49b9b1b21927a8627, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!1 &1027427278 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8963686766640408568, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+  m_PrefabInstance: {fileID: 1027427276}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &1027427279 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 6948066750211098915, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+  m_PrefabInstance: {fileID: 1027427276}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1027427280
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1027427278}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 931741ff3d7c72646a627a2efb025680, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DistantLands.Cozy.Plume.Runtime::DistantLands.Cozy.PlumeModule
+  cachedWeatherSphere: {fileID: 1027427277}
+  cachedSystem: {fileID: 0}
+  volumetricCloudProfile: {fileID: 11400000, guid: af8570cd92dc38a4fb6f28796631d855, type: 2}
+  cloudChunkPrefab: {fileID: 8377891541840844724, guid: 14274e75fd089eb4d8a6f636d963d186, type: 3}
+  coverageIntensityOffset: 0.2
+  cloudCoverage: 0.55
+  bendToHorizonMultiplier: 0.1
+  offset: {x: 0, y: 0, z: 0}
+  matrixHolder: {fileID: 0}
+  useColliders: 1
+  useShadows: 0
+  cullInsideTriggers: 0
+  framesBetweenRenders: 10
 --- !u!1 &1112437536
 GameObject:
   m_ObjectHideFlags: 0
@@ -683,6 +845,7 @@ GameObject:
   - component: {fileID: 1430116131}
   - component: {fileID: 1430116130}
   - component: {fileID: 1430116133}
+  - component: {fileID: 1430116134}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -808,6 +971,14 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!124 &1430116134
+Behaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1430116129}
+  m_Enabled: 1
 --- !u!1 &1714760980
 GameObject:
   m_ObjectHideFlags: 0
@@ -825,7 +996,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!108 &1714760981
 Light:
   m_ObjectHideFlags: 0
@@ -1287,8 +1458,10 @@ Material:
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
-  stringTagMap: {}
-  disabledShaderPasses: []
+  stringTagMap:
+    RenderType: Opaque
+  disabledShaderPasses:
+  - MOTIONVECTORS
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
@@ -1385,7 +1558,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.4, g: 0.36, b: 0.27, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.39999998, g: 0.35999998, b: 0.26999995, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
@@ -1397,3 +1570,4 @@ SceneRoots:
   - {fileID: 1714760982}
   - {fileID: 1430116132}
   - {fileID: 1198871377}
+  - {fileID: 1027427276}
