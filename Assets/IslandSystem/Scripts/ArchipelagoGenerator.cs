@@ -145,6 +145,13 @@ namespace IslandSystem
             if (createSeabed) CreateSeabed(root, fieldSize);
             CreateOcean(root, fieldSize);
 
+            // Storm wall around the world edge — radius adapts to this map's ocean size each generation.
+            // Create it if missing so the wall is self-healing across regenerations.
+            var stormWall = FindAnyObjectByType<StormWall>();
+            if (stormWall == null)
+                stormWall = new GameObject("Storm Wall").AddComponent<StormWall>();
+            stormWall.Rebuild(fieldSize * 0.5f);
+
 #if UNITY_EDITOR
             AssetDatabase.SaveAssets();
 #endif
@@ -296,7 +303,8 @@ namespace IslandSystem
             bed.name = "Seabed";
             bed.transform.SetParent(root, true);
             bed.transform.position = new Vector3(0f, seabedLevel, 0f);
-            bed.transform.localScale = new Vector3(size / 10f * 1.1f, 1f, size / 10f * 1.1f);
+            // Span well beyond the ocean hexagon (radius = size) so there's always a floor under the water.
+            bed.transform.localScale = new Vector3(size / 10f * 2.4f, 1f, size / 10f * 2.4f);
 
             var renderer = bed.GetComponent<Renderer>();
             if (seabedMaterial != null)
@@ -312,6 +320,35 @@ namespace IslandSystem
 
         void CreateOcean(Transform root, float size)
         {
+#if POSEIDON_2
+            // Poseidon 2 water: an AreaWater body (drives the water shader + waves) covering the field.
+            if (waterMaterial != null)
+            {
+                var oceanGO = new GameObject("Ocean");
+                oceanGO.transform.SetParent(root, true);
+                oceanGO.transform.position = new Vector3(0f, waterLevel, 0f);
+
+                var water = oceanGO.AddComponent<Pinwheel.Poseidon.AreaWater>(); // adds MeshFilter + MeshRenderer
+                water.material = waterMaterial;
+                water.meshDesc = new Pinwheel.Poseidon.AreaMeshDesc { resolution = 240, needNormals = true, needTangents = true };
+                // Hexagon outline (NOT an axis-aligned rect — Poseidon's area rasterizer crashes on those),
+                // sized to cover the whole archipelago field.
+                float r = size;
+                water.anchors.Clear();
+                for (int i = 0; i < 6; i++)
+                {
+                    float a = i * 60f * Mathf.Deg2Rad;
+                    water.anchors.Add(new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r));
+                }
+                water.GenerateMesh();
+                // Assign mesh + material now so it shows in edit mode (AreaWater.Update normally does this,
+                // but the editor's update loop may not tick while idle).
+                oceanGO.GetComponent<MeshFilter>().sharedMesh = water.sharedMesh;
+                oceanGO.GetComponent<MeshRenderer>().sharedMaterial = waterMaterial;
+                return;
+            }
+#endif
+            // Fallback (no Poseidon / no material): a simple plane.
             var ocean = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ocean.name = "Ocean";
             ocean.transform.SetParent(root, true);

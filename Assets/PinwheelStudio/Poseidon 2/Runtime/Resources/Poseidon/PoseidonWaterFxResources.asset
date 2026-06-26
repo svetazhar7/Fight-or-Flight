@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41c50de98739ae34293f9648ac5fabd7, type: 3}
+  m_Name: PoseidonWaterFxResources
+  m_EditorClassIdentifier: 
+  underwaterMaterial: {fileID: 2100000, guid: 5c2b805de5e20244e8d81001094566c1, type: 2}
+  wetLensMaterial: {fileID: 2100000, guid: 907f389d3e9e22a4798bdaf24d8c427b, type: 2}
+  noiseTexture: {fileID: 2800000, guid: 024057ec18266e84b86ce8ec9dfdb537, type: 3}
+  causticTexture: {fileID: 2800000, guid: eeacbffe8eb46d343b0d7a9189130772, type: 3}
+  distortionNormalMap: {fileID: 2800000, guid: 25c43a7adff5d474291252fa203b540c, type: 3}
+  dropletsNormalMap: {fileID: 2800000, guid: 4d6c193a4acebf14db2085757b1db25f, type: 3}

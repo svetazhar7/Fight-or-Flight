@@ -572,10 +572,10 @@ namespace IslandSystem
         }
 
         /// <summary>
-        /// Picks village sites for biomes with valid <see cref="VillageSettings"/> and FLATTENS the height
-        /// array under each (level to the local average, SmoothStep blend on the rim). Prefers flat, in-band,
-        /// off-fade ground far from other villages; if nothing qualifies it still uses the flattest candidate
-        /// (the site is cleared of trees/rocks regardless).
+        /// Picks village sites for biomes with valid <see cref="VillageSettings"/> and SMOOTHS the height
+        /// array under each (gentle blur that keeps broad elevation but removes sharp bumps). Prefers flat,
+        /// in-band, off-fade ground far from other villages, and requires the whole village disk to sit
+        /// inland (off the coast/tile edge) so it can't be clipped.
         /// </summary>
         static void ChooseAndFlattenVillages(float[,] heights, int res, Vector3 size, List<BiomeBand> bands,
             float waterline, int seed, List<VillageZone> villages)
@@ -608,8 +608,11 @@ namespace IslandSystem
                     if (placedForBiome >= vs.villageCount) break;
                     var center = new Vector2(c.u, c.v);
                     if (!FarFromVillages(center, size, villages, vs.minDistanceBetweenVillages)) continue;
+                    // Keep the whole village (radius + a coastal buffer) on land and off the tile border so
+                    // the settlement never overhangs the shoreline and gets clipped.
+                    if (!VillageFitsInland(heights, center, size, vs.villageRadius + vs.blendRadius, waterline, 0.06f)) continue;
 
-                    float smoothedNorm = FlattenZone(heights, res, size, center, vs.villageRadius, vs.blendRadius);
+                    float smoothedNorm = SmoothZone(heights, res, size, center, vs.villageRadius, vs.blendRadius);
                     villages.Add(new VillageZone
                     {
                         biome = biome,
@@ -633,39 +636,64 @@ namespace IslandSystem
             return true;
         }
 
-        /// <summary>Levels the height array within the radius to its average, blending out over blendRadius. Returns the average (normalized).</summary>
-        static float FlattenZone(float[,] heights, int res, Vector3 size, Vector2 centerUV, float radiusWorld, float blendWorld)
+        /// <summary>
+        /// Smooths the height array within the zone (iterative 3×3 blur) so the ground KEEPS its broad
+        /// height variation but loses sharp local bumps — buildings sit on gently rolling, not flat,
+        /// terrain. Smoothing strength fades to 0 over <paramref name="blendWorld"/> so it blends into the
+        /// surrounding relief. Returns the resulting centre height (normalized).
+        /// </summary>
+        static float SmoothZone(float[,] heights, int res, Vector3 size, Vector2 centerUV, float radiusWorld, float blendWorld)
         {
             float cellX = size.x / (res - 1), cellZ = size.z / (res - 1);
             float cu = centerUV.x * (res - 1), cv = centerUV.y * (res - 1);
             float outer = radiusWorld + blendWorld;
-            int rx = Mathf.CeilToInt(outer / cellX) + 1, rz = Mathf.CeilToInt(outer / cellZ) + 1;
-            int x0 = Mathf.Clamp((int)cu - rx, 0, res - 1), x1 = Mathf.Clamp((int)cu + rx, 0, res - 1);
-            int y0 = Mathf.Clamp((int)cv - rz, 0, res - 1), y1 = Mathf.Clamp((int)cv + rz, 0, res - 1);
+            int rx = Mathf.CeilToInt(outer / cellX) + 2, rz = Mathf.CeilToInt(outer / cellZ) + 2;
+            int x0 = Mathf.Clamp((int)cu - rx, 1, res - 2), x1 = Mathf.Clamp((int)cu + rx, 1, res - 2);
+            int y0 = Mathf.Clamp((int)cv - rz, 1, res - 2), y1 = Mathf.Clamp((int)cv + rz, 1, res - 2);
+            if (x1 < x0 || y1 < y0) return SampleGrid(heights, centerUV.x, centerUV.y);
 
-            double sum = 0; int cnt = 0;
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++)
-                {
-                    float dx = (x - cu) * cellX, dz = (y - cv) * cellZ;
-                    if (dx * dx + dz * dz <= radiusWorld * radiusWorld) { sum += heights[y, x]; cnt++; }
-                }
-            if (cnt == 0) return SampleGrid(heights, centerUV.x, centerUV.y);
-            float avg = (float)(sum / cnt);
-
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++)
-                {
-                    float dx = (x - cu) * cellX, dz = (y - cv) * cellZ;
-                    float d = Mathf.Sqrt(dx * dx + dz * dz);
-                    if (d <= radiusWorld) heights[y, x] = avg;
-                    else if (d <= outer)
+            // More passes on bigger zones → consistently gentle slopes regardless of island size.
+            int iterations = Mathf.Clamp(Mathf.RoundToInt(radiusWorld / Mathf.Max(cellX, cellZ) / 2f), 5, 18);
+            for (int it = 0; it < iterations; it++)
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++)
                     {
-                        float t = Mathf.SmoothStep(0f, 1f, (d - radiusWorld) / Mathf.Max(0.0001f, blendWorld));
-                        heights[y, x] = Mathf.Lerp(avg, heights[y, x], t);
+                        float dx = (x - cu) * cellX, dz = (y - cv) * cellZ;
+                        float d = Mathf.Sqrt(dx * dx + dz * dz);
+                        if (d > outer) continue;
+                        float w = d <= radiusWorld ? 1f
+                            : 1f - Mathf.SmoothStep(0f, 1f, (d - radiusWorld) / Mathf.Max(0.0001f, blendWorld));
+                        float avg = (heights[y, x]
+                            + heights[y, x - 1] + heights[y, x + 1]
+                            + heights[y - 1, x] + heights[y + 1, x]
+                            + heights[y - 1, x - 1] + heights[y - 1, x + 1]
+                            + heights[y + 1, x - 1] + heights[y + 1, x + 1]) / 9f;
+                        heights[y, x] = Mathf.Lerp(heights[y, x], avg, w);
                     }
+            return SampleGrid(heights, centerUV.x, centerUV.y);
+        }
+
+        /// <summary>
+        /// True if the whole village disk (<paramref name="radiusWorld"/>) sits on land above
+        /// <paramref name="waterline"/> and inside the tile by <paramref name="edgeMargin"/> (UV) — so the
+        /// settlement never overhangs the coast and gets clipped at the island edge.
+        /// </summary>
+        static bool VillageFitsInland(float[,] heights, Vector2 centerUV, Vector3 size, float radiusWorld, float waterline, float edgeMargin)
+        {
+            const int spokes = 20;
+            for (int ring = 1; ring <= 2; ring++)
+            {
+                float rr = radiusWorld * (ring == 1 ? 0.6f : 1f);
+                for (int s = 0; s < spokes; s++)
+                {
+                    float a = Mathf.PI * 2f * s / spokes;
+                    float u = centerUV.x + Mathf.Cos(a) * rr / size.x;
+                    float v = centerUV.y + Mathf.Sin(a) * rr / size.z;
+                    if (u < edgeMargin || u > 1f - edgeMargin || v < edgeMargin || v > 1f - edgeMargin) return false;
+                    if (SampleGrid(heights, u, v) <= waterline) return false;
                 }
-            return avg;
+            }
+            return true;
         }
 
         /// <summary>Places village buildings as GameObjects on the levelled ground of each zone (under a "Village" holder).</summary>
@@ -704,22 +732,86 @@ namespace IslandSystem
                     var prefab = vs.buildingPrefabs[rng.Next(vs.buildingPrefabs.Length)];
                     if (prefab == null) continue;
 
-                    Vector3 worldPos = origin + new Vector3(xz.x, z.smoothedHeight, xz.y);
+                    float bu = Mathf.Clamp01(xz.x / data.size.x), bv = Mathf.Clamp01(xz.y / data.size.z);
+                    if (data.GetSteepness(bu, bv) > 24f) continue; // skip cliffs; gentler ground gets a flat pad
+                    float padHNorm = data.GetInterpolatedHeight(bu, bv) / Mathf.Max(0.0001f, data.size.y);
+                    Vector3 worldPos = origin + new Vector3(xz.x, padHNorm * data.size.y, xz.y);
+
                     GameObject go;
 #if UNITY_EDITOR
                     go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab, holder);
-                    go.transform.position = worldPos;
 #else
-                    go = Object.Instantiate(prefab, worldPos, Quaternion.identity, holder);
+                    go = Object.Instantiate(prefab, holder);
 #endif
+                    go.transform.position = worldPos;
                     if (vs.randomYRotation) go.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
                     float s = Mathf.Lerp(vs.buildingScaleRange.x, vs.buildingScaleRange.y, (float)rng.NextDouble());
                     if (s > 0f) go.transform.localScale = go.transform.localScale * s;
+
+                    // Level a footprint-sized pad under THIS building to its base height, then drop the model
+                    // so its lowest point rests on the pad — each house sits flush (no float, no sinking),
+                    // while the village keeps varied elevation between houses.
+                    float foot = FootprintRadius(go);
+                    FlattenPad(data, bu, bv, padHNorm, foot + 1.0f, foot * 0.7f);
+                    float bottom = RendererBottomY(go);
+                    go.transform.position += new Vector3(0f, worldPos.y - bottom - 0.1f, 0f);
 
                     placedXZ.Add(xz);
                     placed++;
                 }
             }
+        }
+
+        /// <summary>Horizontal half-extent (world units) of a prefab instance's combined renderer bounds.</summary>
+        static float FootprintRadius(GameObject go)
+        {
+            bool has = false; Bounds b = default;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            { if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds); }
+            return has ? Mathf.Max(Mathf.Max(b.extents.x, b.extents.z), 1.5f) : 4f;
+        }
+
+        /// <summary>Lowest world-space Y of a prefab instance's renderers (its base), for snapping to the ground.</summary>
+        static float RendererBottomY(GameObject go)
+        {
+            bool has = false; float minY = go.transform.position.y;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            { float m = r.bounds.min.y; if (!has) { minY = m; has = true; } else minY = Mathf.Min(minY, m); }
+            return minY;
+        }
+
+        /// <summary>
+        /// Levels a flat pad in the LIVE terrain heightmap: cells within <paramref name="padRadius"/> are set
+        /// to <paramref name="padHNorm"/>, blending back to the existing relief over <paramref name="padBlend"/>.
+        /// Used per-building so each house gets level ground without flattening the whole village.
+        /// </summary>
+        static void FlattenPad(TerrainData data, float u, float v, float padHNorm, float padRadius, float padBlend)
+        {
+            int res = data.heightmapResolution;
+            Vector3 size = data.size;
+            float cellX = size.x / (res - 1), cellZ = size.z / (res - 1);
+            float cu = u * (res - 1), cv = v * (res - 1);
+            float outer = padRadius + padBlend;
+            int rx = Mathf.CeilToInt(outer / cellX) + 1, rz = Mathf.CeilToInt(outer / cellZ) + 1;
+            int x0 = Mathf.Clamp((int)cu - rx, 0, res - 1), x1 = Mathf.Clamp((int)cu + rx, 0, res - 1);
+            int y0 = Mathf.Clamp((int)cv - rz, 0, res - 1), y1 = Mathf.Clamp((int)cv + rz, 0, res - 1);
+            int w = x1 - x0 + 1, h = y1 - y0 + 1;
+            if (w <= 0 || h <= 0) return;
+
+            float[,] hh = data.GetHeights(x0, y0, w, h);
+            for (int yy = 0; yy < h; yy++)
+                for (int xx = 0; xx < w; xx++)
+                {
+                    float dx = (x0 + xx - cu) * cellX, dz = (y0 + yy - cv) * cellZ;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (d <= padRadius) hh[yy, xx] = padHNorm;
+                    else if (d <= outer)
+                    {
+                        float t = Mathf.SmoothStep(0f, 1f, (d - padRadius) / Mathf.Max(0.0001f, padBlend));
+                        hh[yy, xx] = Mathf.Lerp(padHNorm, hh[yy, xx], t);
+                    }
+                }
+            data.SetHeights(x0, y0, hh);
         }
     }
 }

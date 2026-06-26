@@ -1,0 +1,183 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8fd1e22338060b4085c5705c60d9591, type: 3}
+  m_Name: WaterShaderLibrary_Poseidon
+  m_EditorClassIdentifier: 
+  m_shaderDescriptions:
+  - m_name: 1_LP_F_V
+    m_shader: {fileID: -6465566751694194690, guid: aa34fe2254f27db469871a16b4330ee2,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 0
+    m_features: 30430
+    m_specialFeatures: 
+  - m_name: 2_LP_F_V
+    m_shader: {fileID: -6465566751694194690, guid: cb1e249f2ba0ad64f806bdde1ce1754e,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 0
+    m_features: 30414
+    m_specialFeatures: 
+  - m_name: 3_LP_F_V
+    m_shader: {fileID: -6465566751694194690, guid: 5eccd7cd20fd39f439f941533e67e13e,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 0
+    m_features: 29382
+    m_specialFeatures: 
+  - m_name: 4_LP_F_B
+    m_shader: {fileID: -6465566751694194690, guid: 82f7ef338b1112649988a6af4e794e2b,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 1
+    m_features: 25286
+    m_specialFeatures: 
+  - m_name: 5_LP_F_B
+    m_shader: {fileID: -6465566751694194690, guid: f4d187782999dfb44ae58236ef172567,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 1
+    m_features: 26318
+    m_specialFeatures: 
+  - m_name: 6_LP_F_P
+    m_shader: {fileID: -6465566751694194690, guid: 22ddc10921a153e46b5c040a5487da05,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 2
+    m_features: 462
+    m_specialFeatures: 
+  - m_name: 7_LP_F_P
+    m_shader: {fileID: -6465566751694194690, guid: 4605383363add3f409f140e69b6edf92,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 0
+    m_priority: 2
+    m_features: 452
+    m_specialFeatures: 
+  - m_name: 8_LP_R_V
+    m_shader: {fileID: -6465566751694194690, guid: a63eace428304414f8b2bedd2b6a3bbc,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 1
+    m_priority: 0
+    m_features: 27334
+    m_specialFeatures: 
+  - m_name: 9_LP_R_B
+    m_shader: {fileID: -6465566751694194690, guid: 530b4cd3af11d2543b2e9857cd5f4d78,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 1
+    m_priority: 1
+    m_features: 2758
+    m_specialFeatures: 
+  - m_name: 10_LP_R_P
+    m_shader: {fileID: -6465566751694194690, guid: fd169d15f29c49743af3257fea65cc9f,
+      type: 3}
+    m_visualStyle: 0
+    m_meshType: 1
+    m_priority: 2
+    m_features: 452
+    m_specialFeatures: 
+  - m_name: 11_S_F_V
+    m_shader: {fileID: -6465566751694194690, guid: eb45b969f22540547be8c25d80aa8568,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 0
+    m_features: 30462
+    m_specialFeatures: 
+  - m_name: 12_S_F_V
+    m_shader: {fileID: -6465566751694194690, guid: 3c1acf00b52c0434b9912943894559a5,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 0
+    m_features: 30462
+    m_specialFeatures: Sharp Foam
+  - m_name: 13_S_F_V
+    m_shader: {fileID: -6465566751694194690, guid: 26bb6940c86598e4b88b3892033f87b6,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 0
+    m_features: 30446
+    m_specialFeatures: 
+  - m_name: 14_S_F_V
+    m_shader: {fileID: -6465566751694194690, guid: 74344318fda340f4e8b4addf3c1e921f,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 0
+    m_features: 29414
+    m_specialFeatures: 
+  - m_name: 15_S_F_B
+    m_shader: {fileID: -6465566751694194690, guid: 917b825d0c0e6cd4ab87eb5c9acb5abf,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 1
+    m_features: 25318
+    m_specialFeatures: 
+  - m_name: 16_S_F_B
+    m_shader: {fileID: -6465566751694194690, guid: 7a872aa95646e5343bbe225cfc832e21,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 1
+    m_features: 26350
+    m_specialFeatures: 
+  - m_name: 17_S_F_P
+    m_shader: {fileID: -6465566751694194690, guid: 2ffc6f605fa7b7b4a91a5d5315226452,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 2
+    m_features: 494
+    m_specialFeatures: 
+  - m_name: 18_S_F_P
+    m_shader: {fileID: -6465566751694194690, guid: 45f065c1f254dcd46b0f8b933aa67b14,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 0
+    m_priority: 2
+    m_features: 484
+    m_specialFeatures: 
+  - m_name: 19_S_R_V
+    m_shader: {fileID: -6465566751694194690, guid: 9cd8d23824703cc4aadab16cfdb231bc,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 1
+    m_priority: 0
+    m_features: 27366
+    m_specialFeatures: 
+  - m_name: 20_S_R_B
+    m_shader: {fileID: -6465566751694194690, guid: bc934298ec07a4748be5db4e81969567,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 1
+    m_priority: 1
+    m_features: 2790
+    m_specialFeatures: 
+  - m_name: 21_S_R_P
+    m_shader: {fileID: -6465566751694194690, guid: 79021c459eb356441b3191b69fca0f89,
+      type: 3}
+    m_visualStyle: 1
+    m_meshType: 1
+    m_priority: 2
+    m_features: 484
+    m_specialFeatures: 

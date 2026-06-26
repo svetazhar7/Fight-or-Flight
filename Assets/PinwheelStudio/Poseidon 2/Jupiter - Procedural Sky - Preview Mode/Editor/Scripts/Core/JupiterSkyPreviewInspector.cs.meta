@@ -1,0 +1,12 @@
+fileFormatVersion: 2
+guid: 74e777753f457104a91091e8c18c404d
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - jupiterBackground: {fileID: 2800000, guid: fc9ecb3650c05e8429d29126e0ead7b3, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

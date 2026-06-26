@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: b099d3b1d68429d468c359dafd80fde4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - m_waterBody: {instanceID: 0}
+  - m_volumeProfile: {fileID: 11400000, guid: 3737b91ba8e8096439aef0e79617bc75, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

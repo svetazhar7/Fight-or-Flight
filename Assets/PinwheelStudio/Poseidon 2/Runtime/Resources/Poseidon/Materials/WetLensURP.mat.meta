@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 907f389d3e9e22a4798bdaf24d8c427b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 153826
+  packageName: Low Poly Water - Poseidon
+  packageVersion: 1.9.2
+  assetPath: Assets/Polaris - Low Poly Ecosystem/Poseidon - Low Poly Water System/Runtime/Resources/Poseidon/Materials/WetLensURP.mat
+  uploadId: 736744

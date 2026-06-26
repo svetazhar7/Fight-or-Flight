@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 462634666a2b45242a8014127f9f35a5
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - m_waterBody: {instanceID: 0}
+  - m_postProcessProfile: {fileID: 11400000, guid: 54dd56d8cfd81614f81b9abaa6f50828,
+      type: 2}
+  - m_underwaterShader: {fileID: 4800000, guid: d52d145ed78d68349b5258334b37dd91,
+      type: 3}
+  - m_wetLensShader: {fileID: 4800000, guid: 30516261272302448add6f8b38386238, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

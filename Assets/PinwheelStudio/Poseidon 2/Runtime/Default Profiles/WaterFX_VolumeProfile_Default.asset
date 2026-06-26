@@ -1,0 +1,248 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-4900852984846979773
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 720855a007109dd4190a93defd8e3bb9, type: 3}
+  m_Name: WetLensOverrideUrp
+  m_EditorClassIdentifier: 
+  active: 1
+  dropletsNormalMap:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  strength:
+    m_OverrideState: 0
+    m_Value: 1
+  intensity:
+    m_OverrideState: 0
+    m_Value: 0
+--- !u!114 &-4720891179948176220
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 720855a007109dd4190a93defd8e3bb9, type: 3}
+  m_Name: WetLensUrp
+  m_EditorClassIdentifier: 
+  active: 1
+  dropletsNormalMap:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: ea01e725daf756041af9b32dacdf014a, type: 3}
+    dimension: 1
+  strength:
+    m_OverrideState: 1
+    m_Value: 1
+  intensity:
+    m_OverrideState: 1
+    m_Value: 0
+--- !u!114 &-1806000295814060828
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 737bb5c030cbe824a900bc5999ac94f9, type: 3}
+  m_Name: UnderwaterOverrideUrp
+  m_EditorClassIdentifier: 
+  active: 1
+  maxDepth:
+    m_OverrideState: 0
+    m_Value: 10
+  surfaceColorBoost:
+    m_OverrideState: 0
+    m_Value: 1
+  shallowFogColor:
+    m_OverrideState: 0
+    m_Value: {r: 0, g: 0, b: 1, a: 0.5}
+  deepFogColor:
+    m_OverrideState: 0
+    m_Value: {r: 0, g: 0, b: 1, a: 1}
+  viewDistance:
+    m_OverrideState: 0
+    m_Value: 40
+  noiseTexture:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  causticTexture:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  causticSize:
+    m_OverrideState: 0
+    m_Value: 10
+  causticStrength:
+    m_OverrideState: 0
+    m_Value: 1
+  distortionNormalMap:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  distortionStrength:
+    m_OverrideState: 0
+    m_Value: 1
+  waterFlowSpeed:
+    m_OverrideState: 0
+    m_Value: 1
+  waterLevel:
+    m_OverrideState: 0
+    m_Value: 0
+  intensity:
+    m_OverrideState: 0
+    m_Value: 0
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: WaterFX_VolumeProfile_Default
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: 3191264482027794614}
+  - {fileID: -4720891179948176220}
+--- !u!114 &932842556528366557
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Underwater
+  m_EditorClassIdentifier: Pinwheel.Poseidon.Runtime:Pinwheel.Poseidon.FX.Universal:Underwater
+  active: 1
+  <displayName>k__BackingField: 
+  waterLevel:
+    m_OverrideState: 0
+    m_Value: 0
+  maxDepth:
+    m_OverrideState: 0
+    m_Value: 10
+  surfaceColorBoost:
+    m_OverrideState: 0
+    m_Value: 1
+  shallowFogColor:
+    m_OverrideState: 0
+    m_Value:
+      r: 0
+      g: 0
+      b: 1
+      a: 0.5
+  deepFogColor:
+    m_OverrideState: 0
+    m_Value:
+      r: 0
+      g: 0
+      b: 1
+      a: 1
+  viewDistance:
+    m_OverrideState: 0
+    m_Value: 40
+  enableCaustic:
+    m_OverrideState: 0
+    m_Value: 0
+  causticTexture:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  causticSize:
+    m_OverrideState: 0
+    m_Value: 10
+  causticStrength:
+    m_OverrideState: 0
+    m_Value: 1
+  enableDistortion:
+    m_OverrideState: 0
+    m_Value: 0
+  distortionNormalMap:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  distortionStrength:
+    m_OverrideState: 0
+    m_Value: 1
+  waterFlowSpeed:
+    m_OverrideState: 0
+    m_Value: 1
+  intensity:
+    m_OverrideState: 0
+    m_Value: 0
+--- !u!114 &3191264482027794614
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 737bb5c030cbe824a900bc5999ac94f9, type: 3}
+  m_Name: UnderwaterUrp
+  m_EditorClassIdentifier: 
+  active: 1
+  maxDepth:
+    m_OverrideState: 1
+    m_Value: 5
+  surfaceColorBoost:
+    m_OverrideState: 1
+    m_Value: 1
+  shallowFogColor:
+    m_OverrideState: 1
+    m_Value: {r: 0.5245282, g: 0.5245282, b: 0.5245282, a: 1}
+  deepFogColor:
+    m_OverrideState: 1
+    m_Value: {r: 0.25934482, g: 0.5797435, b: 0.8867924, a: 1}
+  viewDistance:
+    m_OverrideState: 1
+    m_Value: 20
+  noiseTexture:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: 024057ec18266e84b86ce8ec9dfdb537, type: 3}
+    dimension: 1
+  causticTexture:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: eeacbffe8eb46d343b0d7a9189130772, type: 3}
+    dimension: 1
+  causticSize:
+    m_OverrideState: 1
+    m_Value: 12.8
+  causticStrength:
+    m_OverrideState: 1
+    m_Value: 3
+  distortionNormalMap:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: ff5ac030adb9f63478479bc12d11b078, type: 3}
+    dimension: 1
+  distortionStrength:
+    m_OverrideState: 1
+    m_Value: 1.5
+  waterFlowSpeed:
+    m_OverrideState: 1
+    m_Value: 5
+  waterLevel:
+    m_OverrideState: 1
+    m_Value: -0.05
+  intensity:
+    m_OverrideState: 1
+    m_Value: 0

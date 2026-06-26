@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e940843e5b345034cae3aa441e2c2309, type: 3}
+  m_Name: PoseidonSettings
+  m_EditorClassIdentifier: 
+  noiseTexture: {fileID: 2800000, guid: 024057ec18266e84b86ce8ec9dfdb537, type: 3}
+  defaultNormalMap: {fileID: 2800000, guid: 60b954d54d7515a4ca61b99ffb84bd35, type: 3}
+  defaultUnderwaterDistortionMap: {fileID: 2800000, guid: ff5ac030adb9f63478479bc12d11b078,
+    type: 3}
+  defaultWetLensDistortionMap: {fileID: 2800000, guid: ea01e725daf756041af9b32dacdf014a,
+    type: 3}
