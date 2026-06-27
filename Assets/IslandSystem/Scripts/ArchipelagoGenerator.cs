@@ -62,8 +62,13 @@ namespace IslandSystem
         [Tooltip("Adds a floor under the water so open ocean isn't a void (and the toon water has depth to read).")]
         public bool createSeabed = true;
         public Material seabedMaterial;
-        [Tooltip("World Y of the seabed plane. Below the islands' Y=0 base and the water surface.")]
+        [Tooltip("World Y of the single seabed plane. Each island tile is sunk so its flat skirt sits just " +
+                 "below this plane — the seabed hides the overlapping tile floors, so islands rise out of one " +
+                 "continuous seabed with no Z-fighting and no square tile seams. Keep it below waterLevel.")]
         public float seabedLevel = -1f;
+
+        /// <summary>How far below the seabed plane each island tile's flat base is sunk so the seabed hides it.</summary>
+        const float IslandFloorSink = 1f;
 
         [Header("Output")]
         [Tooltip("Folder where generated TerrainData assets are written (must exist).")]
@@ -189,13 +194,18 @@ namespace IslandSystem
             if (!Application.isPlaying)
                 AssetDatabase.CreateAsset(data, $"{generatedFolder}/{prefix}_{nameIndex}.asset");
 #endif
-            float waterline = waterLevel / Mathf.Max(0.0001f, size.y);
+            // Sink each tile so its dead-flat skirt (terrain base, height 0) sits BELOW the single seabed
+            // plane, which then hides it. Islands appear to rise out of one continuous seabed — no overlapping
+            // flat tile floors fighting each other (Z-fighting) and no square tile seams. The waterline is
+            // re-expressed relative to this lowered base so the biome bands still line up with the sea surface.
+            float baseY = seabedLevel - IslandFloorSink;
+            float waterline = (waterLevel - baseY) / Mathf.Max(0.0001f, size.y);
             IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, out var villages, resolution);
 
             GameObject go = Terrain.CreateTerrainGameObject(data);
             go.name = $"{prefix}_{nameIndex}_{def.islandType}";
             go.transform.SetParent(root, true);
-            go.transform.position = center + new Vector3(-size.x * 0.5f, 0f, -size.z * 0.5f);
+            go.transform.position = center + new Vector3(-size.x * 0.5f, baseY, -size.z * 0.5f);
 
             var terrain = go.GetComponent<Terrain>();
             terrain.allowAutoConnect = false; // islands are independent; avoids "different heightmap resolution" spam
