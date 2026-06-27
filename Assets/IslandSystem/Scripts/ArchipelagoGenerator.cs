@@ -156,6 +156,15 @@ namespace IslandSystem
             if (stormWall == null)
                 stormWall = new GameObject("Storm Wall").AddComponent<StormWall>();
             stormWall.Rebuild(fieldSize * 0.5f);
+            // Lightning that strikes inside the storm-cloud ring (COZY thunder, play mode).
+            var stormLightning = stormWall.GetComponent<StormLightning>();
+            if (stormLightning == null)
+                stormLightning = stormWall.gameObject.AddComponent<StormLightning>();
+#if UNITY_EDITOR
+            if (stormLightning.lightningPrefab == null)
+                stormLightning.lightningPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                    "Packages/com.distantlands.cozy.core/Content/Prefabs/Thunder And Lightning.prefab");
+#endif
 
 #if UNITY_EDITOR
             if (!Application.isPlaying) AssetDatabase.SaveAssets();
@@ -345,40 +354,15 @@ namespace IslandSystem
 
         void CreateOcean(Transform root, float size)
         {
-#if POSEIDON_2
-            // Poseidon 2 water: an AreaWater body (drives the water shader + waves) covering the field.
-            if (waterMaterial != null)
-            {
-                var oceanGO = new GameObject("Ocean");
-                oceanGO.transform.SetParent(root, true);
-                oceanGO.transform.position = new Vector3(0f, waterLevel, 0f);
-
-                var water = oceanGO.AddComponent<Pinwheel.Poseidon.AreaWater>(); // adds MeshFilter + MeshRenderer
-                water.material = waterMaterial;
-                water.meshDesc = new Pinwheel.Poseidon.AreaMeshDesc { resolution = 240, needNormals = true, needTangents = true };
-                // Hexagon outline (NOT an axis-aligned rect — Poseidon's area rasterizer crashes on those),
-                // sized to cover the whole archipelago field.
-                float r = size;
-                water.anchors.Clear();
-                for (int i = 0; i < 6; i++)
-                {
-                    float a = i * 60f * Mathf.Deg2Rad;
-                    water.anchors.Add(new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r));
-                }
-                water.GenerateMesh();
-                // Assign mesh + material now so it shows in edit mode (AreaWater.Update normally does this,
-                // but the editor's update loop may not tick while idle).
-                oceanGO.GetComponent<MeshFilter>().sharedMesh = water.sharedMesh;
-                oceanGO.GetComponent<MeshRenderer>().sharedMaterial = waterMaterial;
-                return;
-            }
-#endif
-            // Fallback (no Poseidon / no material): a simple plane.
+            // Flat SQUARE ocean plane carrying the water material. The Poseidon water shader renders fine on
+            // a plain plane; its AreaWater rasterizer crashes on rectangular outlines, so we DON'T use
+            // AreaWater (that's why the ocean used to be a hexagon). The plane is sized larger than the field
+            // so the open sea extends well past the storm-cloud ring (no hard ocean edge near the play area).
             var ocean = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ocean.name = "Ocean";
             ocean.transform.SetParent(root, true);
             ocean.transform.position = new Vector3(0f, waterLevel, 0f);
-            ocean.transform.localScale = new Vector3(size / 10f, 1f, size / 10f);
+            ocean.transform.localScale = new Vector3(size / 5f, 1f, size / 5f); // half-extent ≈ fieldSize
 
             var renderer = ocean.GetComponent<Renderer>();
             if (waterMaterial != null)

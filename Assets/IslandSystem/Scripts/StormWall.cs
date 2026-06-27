@@ -30,8 +30,8 @@ namespace IslandSystem
 
         [Header("Wall shape")]
         [Min(8)] public int segments = 30;
-        [Tooltip("Height of the cloud wall (sea level up to roughly this many units).")]
-        public float wallHeight = 1500f;
+        [Tooltip("Height of the cloud wall (from its base up to roughly this many units).")]
+        public float wallHeight = 1300f;
         [Tooltip("Random height variation between segments.")]
         public float heightVariation = 300f;
         [Tooltip("Random radius wobble between segments, so the edge isn't a perfect circle.")]
@@ -41,9 +41,9 @@ namespace IslandSystem
         [Tooltip("Radial thickness of the wall.")]
         public float depth = 650f;
 
-        [Tooltip("Altitude of the bottom of the cloud band. Kept above the water so clouds float in the sky " +
-                 "instead of erupting from the sea (water surface is around y=4).")]
-        public float baseAltitude = 600f;
+        [Tooltip("Altitude of the bottom of the cloud band. Set just below the water surface (~y=4) so the " +
+                 "storm clouds start right at the sea and tower upward at the map edge.")]
+        public float baseAltitude = -150f;
 
         [Header("Clouds")]
         public Material material;
@@ -60,7 +60,10 @@ namespace IslandSystem
         [ContextMenu("Rebuild Storm Wall")]
         public void Rebuild()
         {
-            Rebuild(FindOceanHalfExtent());
+            // The ocean plane now extends well past the storm; the storm marks the island-field edge, which
+            // sits at roughly half the ocean's half-extent.
+            float h = FindOceanHalfExtent();
+            Rebuild(h > 1f ? h * 0.5f : fallbackRadius);
         }
 
         /// <summary>Rebuild the wall at <paramref name="oceanHalfExtent"/> + margin. Called by the generator.</summary>
