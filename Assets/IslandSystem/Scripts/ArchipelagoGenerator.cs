@@ -153,7 +153,7 @@ namespace IslandSystem
             stormWall.Rebuild(fieldSize * 0.5f);
 
 #if UNITY_EDITOR
-            AssetDatabase.SaveAssets();
+            if (!Application.isPlaying) AssetDatabase.SaveAssets();
 #endif
             Debug.Log($"[Archipelago] Level {level}: {hubCount} hub(s), each + {largePerHub}L/{mediumPerHub}M/{smallPerHub}S " +
                       $"satellites = {idx} islands total.", this);
@@ -184,7 +184,10 @@ namespace IslandSystem
             // Create the TerrainData asset FIRST, then populate it (SetAlphamaps only persists on a live asset).
             var data = new TerrainData { name = $"{prefix}_{nameIndex}_TerrainData" };
 #if UNITY_EDITOR
-            AssetDatabase.CreateAsset(data, $"{generatedFolder}/{prefix}_{nameIndex}.asset");
+            // At edit time the asset must exist BEFORE SetAlphamaps (the CreateAsset-drops-splat quirk). At
+            // runtime there's no AssetDatabase, so the TerrainData stays in-memory and SetAlphamaps persists.
+            if (!Application.isPlaying)
+                AssetDatabase.CreateAsset(data, $"{generatedFolder}/{prefix}_{nameIndex}.asset");
 #endif
             float waterline = waterLevel / Mathf.Max(0.0001f, size.y);
             IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, out var villages, resolution);
@@ -211,6 +214,18 @@ namespace IslandSystem
         }
 
         // ---- Palettes -----------------------------------------------------
+
+        /// <summary>
+        /// Runtime / network entry point: apply the (server-chosen, synced) seed + level and generate the
+        /// archipelago LOCALLY with in-memory terrains (no AssetDatabase). Every peer that calls this with
+        /// the same seed builds an identical world — that's how multiplayer terrain stays in sync.
+        /// </summary>
+        public void GenerateAtRuntime(int seed, int worldLevel)
+        {
+            baseSeed = seed;
+            level = worldLevel;
+            Generate();
+        }
 
         List<IslandTypeDefinition> BuildTypePalette()
         {
@@ -371,6 +386,7 @@ namespace IslandSystem
         void CleanGeneratedTerrain()
         {
 #if UNITY_EDITOR
+            if (Application.isPlaying) return; // runtime terrains are in-memory; nothing on disk to clean
             // Delete previously generated TerrainData so changing level/counts never leaks assets.
             foreach (var guid in AssetDatabase.FindAssets("t:TerrainData", new[] { generatedFolder }))
                 AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
@@ -384,6 +400,7 @@ namespace IslandSystem
             if (shader == null) return null; // Built-in pipeline supplies its own default.
 
 #if UNITY_EDITOR
+            if (Application.isPlaying) return new Material(shader) { name = "URP_Terrain" }; // runtime: in-memory
             string matPath = $"{generatedFolder}/URP_Terrain.mat";
             var existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (existing != null) return existing;

@@ -293,6 +293,13 @@ namespace IslandSystem
         static TerrainLayer GetOrCreateDebugLayer(BiomeAssetManifest biome)
         {
 #if UNITY_EDITOR
+            if (Application.isPlaying)
+            {
+                // Runtime (incl. editor play mode): in-memory layer, no AssetDatabase.
+                var rtex = new Texture2D(8, 8);
+                FillColor(rtex, biome.debugColor);
+                return new TerrainLayer { diffuseTexture = rtex, tileSize = new Vector2(40f, 40f) };
+            }
             const string genFolder = "Assets/IslandSystem/Generated";
             const string dir = genFolder + "/Debug";
             if (!UnityEditor.AssetDatabase.IsValidFolder(genFolder))
