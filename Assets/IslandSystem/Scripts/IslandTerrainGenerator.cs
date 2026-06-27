@@ -85,22 +85,28 @@ namespace IslandSystem
             float cs = Mathf.Cos(sp.rot), sn = Mathf.Sin(sp.rot);
             float ru = (u * cs - v * sn) * sp.scaleX;
             float rv = (u * sn + v * cs) * sp.scaleY;
-            float dist = Mathf.Sqrt(ru * ru + rv * rv) * 2.05f;
+            // Bigger multiplier => smaller land footprint, so the whole island (incl. a gentle coast) fits well
+            // INSIDE the tile with a ring of open water around it — generated "with a margin" instead of being
+            // force-dropped at the tile edge.
+            float dist = Mathf.Sqrt(ru * ru + rv * rv) * 2.45f;
 
-            // Distort the coastline so it isn't a clean circle (bays + peninsulas).
+            // Distort the coastline so it isn't a clean circle (bays + peninsulas). Clamp the OUTWARD push so a
+            // peninsula can't shoot back out to the tile edge and undo the margin (bays carve inward freely).
             float w1 = Mathf.PerlinNoise(fx * 3f + sp.seedOffset, fy * 3f + sp.seedOffset * 0.7f + 13.1f);
             float w2 = Mathf.PerlinNoise(fx * 6.5f + sp.seedOffset * 1.7f + 5.3f, fy * 6.5f + sp.seedOffset * 0.3f + 91.7f);
-            dist += (w1 - 0.5f) * sp.coastWarp + (w2 - 0.5f) * sp.coastWarp * 0.45f;
+            float warp = (w1 - 0.5f) * sp.coastWarp + (w2 - 0.5f) * sp.coastWarp * 0.45f;
+            dist += Mathf.Max(warp, -0.12f);
 
             float edge = 1f - dist;
             if (edge <= 0f) return 0f;
-            float coast = Mathf.Clamp(0.6f - falloff * 0.12f, 0.18f, 0.45f); // coast taper width
+            float coast = Mathf.Clamp(0.78f - falloff * 0.10f, 0.34f, 0.58f); // WIDE coast taper => gentle flat shores
             float m = edge >= coast ? 1f : edge / coast;
             m = Mathf.SmoothStep(0f, 1f, m);
 
-            // Rim guard: force sea at the very tile edge so land never makes a straight cliff there.
-            float border = Mathf.Min(Mathf.Min(fx, 1f - fx), Mathf.Min(fy, 1f - fy));
-            m *= Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(border / 0.04f));
+            // Far safety backstop only: with the smaller footprint the island already fades to sea well inside the
+            // tile, so this just guarantees no clipping in the rare warp case (sea by ~0.47 of the tile radius).
+            float rad = Mathf.Sqrt((fx - 0.5f) * (fx - 0.5f) + (fy - 0.5f) * (fy - 0.5f));
+            m *= 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.47f, rad));
             return m;
         }
 
@@ -131,6 +137,218 @@ namespace IslandSystem
                 }
             }
             return heights;
+        }
+
+        // ---- Biome-aware relief + Perlin erosion --------------------------
+
+        /// <summary>
+        /// Ridged multifractal (Musgrave) in 0..1 — the standard primitive for eroded mountains. Each octave's
+        /// detail is gated by the previous octave's ridge strength (<c>weight</c>), so fine detail appears only
+        /// on the ridges and the valley floors stay smooth: sharp peaks, eroded valleys, no derivatives needed.
+        /// <paramref name="erosion"/> raises the gating gain → more aggressive valley smoothing.
+        /// </summary>
+        static float ErodedRidged(float fx, float fy, float baseFreq, int octaves, float seedOffset, float erosion)
+        {
+            float freq = baseFreq, amp = 1f, norm = 0f, result = 0f, weight = 1f;
+            float gain = Mathf.Lerp(1.4f, 2.4f, Mathf.Clamp01(erosion));
+            const float lacunarity = 2f, hExp = 0.9f;
+            for (int o = 0; o < octaves; o++)
+            {
+                float n = Mathf.PerlinNoise(fx * freq + seedOffset, fy * freq + seedOffset);
+                float signal = 1f - Mathf.Abs(2f * n - 1f); // ridge crest = 1, base = 0
+                signal *= signal;                            // sharpen the ridgelines
+                signal *= weight;                            // erosion: kill detail inside previous valleys
+                weight = Mathf.Clamp01(signal * gain);
+                result += signal * amp;
+                norm += amp;
+                amp *= Mathf.Pow(lacunarity, -hExp);         // spectral falloff
+                freq *= lacunarity;
+            }
+            return norm > 0f ? Mathf.Clamp01(result / norm) : result;
+        }
+
+        /// <summary>
+        /// Layers biome-driven relief on the macro <paramref name="heights"/> form (modified in place):
+        /// low-relief biomes (beach/plain) are smoothed FLAT, high-relief biomes (hills/mountains) get sharp
+        /// eroded ridge detail that grows taller with elevation. Each biome's ruggedness = its
+        /// <see cref="BiomeAssetManifest.reliefStrength"/> biased by its <see cref="BiomeAssetManifest.elevationOrder"/>,
+        /// so default-tuned biomes already read as "flatter low, rougher high".
+        /// </summary>
+        static void ApplyBiomeRelief(float[,] heights, int res, List<WeightedBiome> entries,
+            float[] edges, IslandTypeDefinition def, ShapeParams shape, float waterline)
+        {
+            if (def.mountainRelief <= 0.0001f && def.plainsFlatten <= 0.0001f && def.microRoughness <= 0.0001f)
+                return;
+
+            // Per-band ruggedness keyed by the PERCENT-BASED height bands (the SAME edges the splat uses), so
+            // changing a biome's % actually reshapes the terrain: more mountain % pushes the mountain band down
+            // -> a larger, lower height range gets rugged & raised; more plain % -> more of the island is flat.
+            // center[k] = mid height of biome k's band; rr[k] = its ruggedness (reliefStrength biased by where
+            // the biome sits, so peak biomes stay rugged and shoreline biomes calm even at the 0.5 default).
+            int m = entries.Count;
+            var center = new float[m];
+            var rr = new float[m];
+            for (int k = 0; k < m; k++)
+            {
+                var b = entries[k].biome;
+                center[k] = 0.5f * (edges[k] + edges[k + 1]);
+                rr[k] = Mathf.Clamp01(b.reliefStrength * Mathf.Lerp(0.25f, 1.4f, Mathf.Clamp01(b.elevationOrder)));
+            }
+
+            float invLand = 1f / Mathf.Max(0.0001f, 1f - waterline);
+            float seedOff = shape.seedOffset * 1.31f + 47.7f;
+
+            // Pass 1: per-cell relief weight + the eroded mountain detail to add.
+            var relief = new float[res, res];
+            var add = new float[res, res];
+            for (int y = 0; y < res; y++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    float form = heights[y, x];
+                    if (form <= waterline) { relief[y, x] = 0f; add[y, x] = 0f; continue; }
+
+                    float e = Mathf.Clamp01((form - waterline) * invLand);   // 0 shore .. 1 peak (height factor)
+                    float r = SampleReliefCurve(center, rr, form);           // ruggedness of the band at this height
+                    relief[y, x] = r;
+
+                    float fx = (float)x / res, fy = (float)y / res;
+                    float d = ErodedRidged(fx, fy, def.reliefFrequency, def.reliefOctaves, seedOff, def.erosionStrength);
+                    // Ridges (d~1) raise the land, shallow valleys (d~0) carve a little below the macro form.
+                    float detail = d - 0.22f;
+                    // Taller with absolute elevation; scaled by this biome's ruggedness and the master amount.
+                    add[y, x] = def.mountainRelief * r * detail * (0.4f + 0.6f * e);
+                }
+            }
+
+            // Pass 2: flatten low-relief ground. The plains' rolling comes from the LOW-frequency macro form, so
+            // a small blur can't kill it — instead pull each low-relief cell toward a LARGE-radius blur (the
+            // local elevation trend). At full strength a plain becomes locally flat (it still follows the
+            // island's gross slope) — "minimal hills" plains; rugged ground (high relief) is left alone.
+            if (def.plainsFlatten > 0.0001f)
+            {
+                int radius = Mathf.Max(6, Mathf.RoundToInt(res * 0.14f));
+                var trend = BoxBlur(heights, res, radius);
+                for (int y = 0; y < res; y++)
+                {
+                    for (int x = 0; x < res; x++)
+                    {
+                        float hgt = heights[y, x];
+                        // Fade the flatten out at the coast so it doesn't drag the sea-skirt / shoreline UP toward
+                        // the inland trend (that re-created height at the tile edge => clipping). Plains only.
+                        float coast = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(waterline, waterline + 0.05f, hgt));
+                        float w = def.plainsFlatten * (1f - relief[y, x]) * coast;
+                        heights[y, x] = Mathf.Lerp(hgt, trend[y, x], w);
+                    }
+                }
+            }
+
+            // Pass 3: add the eroded mountain detail + a touch of micro-roughness everywhere on land.
+            for (int y = 0; y < res; y++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    float hh = heights[y, x];
+                    if (hh > waterline && def.microRoughness > 0.0001f)
+                    {
+                        float fx = (float)x / res, fy = (float)y / res;
+                        float micro = Mathf.PerlinNoise(fx * def.reliefFrequency * 3.7f + seedOff + 5.1f,
+                                                        fy * def.reliefFrequency * 3.7f + seedOff + 9.3f);
+                        hh += def.microRoughness * (micro - 0.5f);
+                    }
+                    heights[y, x] = Mathf.Clamp01(hh + add[y, x]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Separable box blur with a sliding-window running sum, so cost is O(res²) regardless of
+        /// <paramref name="radius"/> — used to extract the broad elevation trend for flattening the plains.
+        /// </summary>
+        static float[,] BoxBlur(float[,] src, int res, int radius)
+        {
+            if (radius < 1) return (float[,])src.Clone();
+            var tmp = new float[res, res];
+            for (int y = 0; y < res; y++)                       // horizontal pass
+            {
+                float sum = 0f; int cnt = 0;
+                for (int x = 0; x <= radius && x < res; x++) { sum += src[y, x]; cnt++; }
+                for (int x = 0; x < res; x++)
+                {
+                    tmp[y, x] = sum / cnt;
+                    int addIdx = x + radius + 1, remIdx = x - radius;
+                    if (addIdx < res) { sum += src[y, addIdx]; cnt++; }
+                    if (remIdx >= 0) { sum -= src[y, remIdx]; cnt--; }
+                }
+            }
+            var dst = new float[res, res];
+            for (int x = 0; x < res; x++)                       // vertical pass
+            {
+                float sum = 0f; int cnt = 0;
+                for (int y = 0; y <= radius && y < res; y++) { sum += tmp[y, x]; cnt++; }
+                for (int y = 0; y < res; y++)
+                {
+                    dst[y, x] = sum / cnt;
+                    int addIdx = y + radius + 1, remIdx = y - radius;
+                    if (addIdx < res) { sum += tmp[addIdx, x]; cnt++; }
+                    if (remIdx >= 0) { sum -= tmp[remIdx, x]; cnt--; }
+                }
+            }
+            return dst;
+        }
+
+        /// <summary>Piecewise-linear sample of the (band-centre height -> ruggedness) control points at x in 0..1.</summary>
+        static float SampleReliefCurve(float[] xs, float[] rr, float x)
+        {
+            int m = xs.Length;
+            if (m == 0) return 0f;
+            if (x <= xs[0]) return rr[0];
+            if (x >= xs[m - 1]) return rr[m - 1];
+            for (int k = 1; k < m; k++)
+            {
+                if (x <= xs[k])
+                {
+                    float span = Mathf.Max(1e-5f, xs[k] - xs[k - 1]);
+                    float t = (x - xs[k - 1]) / span;
+                    return Mathf.Lerp(rr[k - 1], rr[k], t);
+                }
+            }
+            return rr[m - 1];
+        }
+
+        /// <summary>
+        /// Land-area percentile band edges: <c>edges[k+1]</c> is the height below which the cumulative % of the
+        /// biomes' weights lies, so each biome owns a height band sized to its share of the island's land area.
+        /// Driven by the biome PERCENTAGES — this is what makes both the relief and the splat respond to them.
+        /// </summary>
+        static float[] ComputeBandEdges(float[,] heights, int res, List<WeightedBiome> entries, float waterline)
+        {
+            int n = entries.Count;
+            float totalPct = 0f;
+            foreach (var e in entries) totalPct += e.percent;
+            if (totalPct <= 0f) totalPct = 1f;
+
+            var land = new List<float>(res * res / 2);
+            for (int y = 0; y < res; y++)
+                for (int x = 0; x < res; x++)
+                    if (heights[y, x] > waterline) land.Add(heights[y, x]);
+            if (land.Count == 0)
+                for (int y = 0; y < res; y++)
+                    for (int x = 0; x < res; x++) land.Add(heights[y, x]);
+            land.Sort();
+
+            var edges = new float[n + 1];
+            edges[0] = 0f;
+            edges[n] = 1f;
+            float acc = 0f;
+            for (int k = 0; k < n - 1; k++)
+            {
+                acc += entries[k].percent / totalPct;
+                edges[k + 1] = Quantile(land, acc);
+            }
+            for (int k = 1; k <= n; k++)
+                if (edges[k] < edges[k - 1]) edges[k] = edges[k - 1]; // keep monotonic
+            return edges;
         }
 
         // ---- Island from a type definition (multi-biome composition) -----
@@ -165,10 +383,9 @@ namespace IslandSystem
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
             int hmRes = Mathf.Max(33, resolutionOverride > 0 ? resolutionOverride : def.heightmapResolution);
-            float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
-                def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
 
-            // Valid biomes, sorted low -> high.
+            // Valid biomes, sorted low -> high. Computed BEFORE the heightmap so the relief pass can shape
+            // each elevation band by its biome's character (plains flat, mountains rugged).
             var entries = new List<WeightedBiome>();
             if (def.biomes != null)
                 foreach (var w in def.biomes)
@@ -176,31 +393,16 @@ namespace IslandSystem
             if (entries.Count == 0) return;
             entries.Sort((a, b) => a.biome.elevationOrder.CompareTo(b.biome.elevationOrder));
 
+            // Macro island form first. Then the relief pass needs the PERCENT-BASED band edges so a biome's %
+            // drives its ruggedness — compute them from the macro form, shape the relief, then RE-compute the
+            // edges from the final heights so the splat/bands line up with the terrain the relief produced.
+            float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
+                def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
+            float[] macroEdges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
+            ApplyBiomeRelief(heights, hmRes, entries, macroEdges, def, shape, waterlineNormalized);
+
             int n = entries.Count;
-            float totalPct = 0f;
-            foreach (var e in entries) totalPct += e.percent;
-
-            // Land-area percentile edges: edge[k+1] = height below which cumulative% of land lies.
-            var land = new List<float>(hmRes * hmRes / 2);
-            for (int y = 0; y < hmRes; y++)
-                for (int x = 0; x < hmRes; x++)
-                    if (heights[y, x] > waterlineNormalized) land.Add(heights[y, x]);
-            if (land.Count == 0)
-                for (int y = 0; y < hmRes; y++)
-                    for (int x = 0; x < hmRes; x++) land.Add(heights[y, x]);
-            land.Sort();
-
-            float[] edges = new float[n + 1];
-            edges[0] = 0f;
-            edges[n] = 1f;
-            float acc = 0f;
-            for (int k = 0; k < n - 1; k++)
-            {
-                acc += entries[k].percent / totalPct;
-                edges[k + 1] = Quantile(land, acc);
-            }
-            for (int k = 1; k <= n; k++)
-                if (edges[k] < edges[k - 1]) edges[k] = edges[k - 1]; // keep monotonic
+            float[] edges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
 
             // Terrain layers + band records. (GetBiomeLayer may create debug-layer ASSETS, which can revert
             // the not-yet-saved TerrainData asset — so we configure `data` only AFTER this, at the very end.)

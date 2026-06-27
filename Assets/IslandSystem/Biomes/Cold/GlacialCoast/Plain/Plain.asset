@@ -16,8 +16,8 @@ MonoBehaviour:
   climateZone: 0
   islandType: 2
   displayName: "\u0420\u0430\u0432\u043D\u0438\u043D\u0430"
-  elevationOrder: 0.55
-  reliefStrength: 0.3
+  elevationOrder: 0.05
+  reliefStrength: 0.05
   debugColor: {r: 0.95, g: 0.96, b: 0.98, a: 1}
   noiseSettings:
     frequency: 3

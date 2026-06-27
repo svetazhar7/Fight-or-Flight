@@ -40,6 +40,22 @@ namespace IslandSystem
         [Tooltip("World-space size of the terrain (x, height, z).")]
         public Vector3 terrainSize = new Vector3(500f, 150f, 500f);
 
+        [Header("Relief & erosion (biome-aware)")]
+        [Tooltip("Master amount of rugged relief added in highland/mountain biomes (normalized height). " +
+                 "0 = flat everywhere; the per-biome reliefStrength × elevationOrder scales it locally.")]
+        [Range(0f, 1f)] public float mountainRelief = 0.85f;
+        [Tooltip("Spatial frequency of the eroded ridge detail (higher = finer, more numerous ridges).")]
+        public float reliefFrequency = 11f;
+        [Tooltip("Octaves of the eroded ridge detail.")]
+        [Range(1, 7)] public int reliefOctaves = 6;
+        [Tooltip("Erosion bias: how much the ridge detail digs valleys vs. only raising peaks (0..1). " +
+                 "Higher also flattens valley floors more strongly (ridge-multifractal valley gating).")]
+        [Range(0f, 1f)] public float erosionStrength = 0.6f;
+        [Tooltip("How hard low-relief (plain/beach) ground is smoothed flat. 0 = keep raw noise, 1 = very flat.")]
+        [Range(0f, 1f)] public float plainsFlatten = 0.85f;
+        [Tooltip("Subtle roughness kept everywhere (incl. plains) so flat ground isn't glassy (normalized).")]
+        [Range(0f, 0.05f)] public float microRoughness = 0.005f;
+
         [Header("Composition — biomes by % (sums to 100)")]
         public List<WeightedBiome> biomes = new List<WeightedBiome>();
 
