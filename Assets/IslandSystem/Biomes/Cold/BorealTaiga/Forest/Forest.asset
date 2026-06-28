@@ -16,8 +16,8 @@ MonoBehaviour:
   climateZone: 0
   islandType: 3
   displayName: "\u041B\u0435\u0441"
-  elevationOrder: 0.4
-  reliefStrength: 0.4
+  elevationOrder: 0.1
+  reliefStrength: 0.1
   debugColor: {r: 0.2, g: 0.4, b: 0.3, a: 1}
   noiseSettings:
     frequency: 3
@@ -56,3 +56,21 @@ MonoBehaviour:
   spawnRules: []
   treeRules: []
   rockRules: []
+  village:
+    enabled: 0
+    buildingPrefabs: []
+    villageCount: 1
+    villageRadius: 45
+    blendRadius: 18
+    buildingsPerVillage: 8
+    minDistanceBetweenVillages: 220
+    minDistanceBetweenBuildings: 9
+    where:
+      minHeight: 0.12
+      maxHeight: 0.7
+      minSlope: 0
+      maxSlope: 14
+      heightBlend: 0.08
+      slopeBlend: 10
+    buildingScaleRange: {x: 1, y: 1}
+    randomYRotation: 1

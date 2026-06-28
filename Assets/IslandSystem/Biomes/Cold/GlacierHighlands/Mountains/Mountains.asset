@@ -16,8 +16,8 @@ MonoBehaviour:
   climateZone: 0
   islandType: 5
   displayName: "\u0413\u043E\u0440\u044B"
-  elevationOrder: 0.85
-  reliefStrength: 0.85
+  elevationOrder: 0.3
+  reliefStrength: 0.1
   debugColor: {r: 0.45, g: 0.47, b: 0.5, a: 1}
   noiseSettings:
     frequency: 3
@@ -52,5 +52,35 @@ MonoBehaviour:
   islandFalloff: 2.5
   heightmapResolution: 513
   terrainSize: {x: 500, y: 150, z: 500}
-  textureLayers: []
+  textureLayers:
+  - label: 
+    terrainLayer: {fileID: 8574412962073106934, guid: 1170b99a57e4a90459aa0e4dbc0732c8, type: 2}
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 0
+      heightBlend: 0
+      slopeBlend: 0
+    weight: 0
   spawnRules: []
+  treeRules: []
+  rockRules: []
+  village:
+    enabled: 0
+    buildingPrefabs: []
+    villageCount: 1
+    villageRadius: 45
+    blendRadius: 18
+    buildingsPerVillage: 8
+    minDistanceBetweenVillages: 220
+    minDistanceBetweenBuildings: 9
+    where:
+      minHeight: 0.12
+      maxHeight: 0.7
+      minSlope: 0
+      maxSlope: 14
+      heightBlend: 0.08
+      slopeBlend: 10
+    buildingScaleRange: {x: 1, y: 1}
+    randomYRotation: 1

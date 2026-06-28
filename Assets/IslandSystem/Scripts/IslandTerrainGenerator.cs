@@ -85,28 +85,31 @@ namespace IslandSystem
             float cs = Mathf.Cos(sp.rot), sn = Mathf.Sin(sp.rot);
             float ru = (u * cs - v * sn) * sp.scaleX;
             float rv = (u * sn + v * cs) * sp.scaleY;
-            // Bigger multiplier => smaller land footprint, so the whole island (incl. a gentle coast) fits well
-            // INSIDE the tile with a ring of open water around it — generated "with a margin" instead of being
-            // force-dropped at the tile edge.
-            float dist = Mathf.Sqrt(ru * ru + rv * rv) * 2.45f;
+            // Footprint scale: smaller land area than the tile so the island sits in open water with a margin,
+            // but big enough to keep a substantial body + mountain (the gentle coast comes from the wide taper).
+            float dist = Mathf.Sqrt(ru * ru + rv * rv) * 2.05f;
 
             // Distort the coastline so it isn't a clean circle (bays + peninsulas). Clamp the OUTWARD push so a
             // peninsula can't shoot back out to the tile edge and undo the margin (bays carve inward freely).
             float w1 = Mathf.PerlinNoise(fx * 3f + sp.seedOffset, fy * 3f + sp.seedOffset * 0.7f + 13.1f);
             float w2 = Mathf.PerlinNoise(fx * 6.5f + sp.seedOffset * 1.7f + 5.3f, fy * 6.5f + sp.seedOffset * 0.3f + 91.7f);
             float warp = (w1 - 0.5f) * sp.coastWarp + (w2 - 0.5f) * sp.coastWarp * 0.45f;
-            dist += Mathf.Max(warp, -0.12f);
+            dist += Mathf.Max(warp, -0.05f); // limit OUTWARD peninsulas so the coast never reaches the radial backstop
 
             float edge = 1f - dist;
             if (edge <= 0f) return 0f;
-            float coast = Mathf.Clamp(0.78f - falloff * 0.10f, 0.34f, 0.58f); // WIDE coast taper => gentle flat shores
-            float m = edge >= coast ? 1f : edge / coast;
-            m = Mathf.SmoothStep(0f, 1f, m);
+            // Wide coast taper: the outer island is a gentle slope from the shoreline up; the flat interior is
+            // carved back in by the plains-flatten pass. Wide taper = long gradual shore, but not a flat pancake.
+            float coast = Mathf.Clamp(1.0f - falloff * 0.08f, 0.55f, 0.82f);
+            // CONCAVE beach profile (t^2): keeps the mask/height low and slowly-changing near the shoreline so the
+            // land meets the water as a gentle slope (the steeper part is pushed up toward the centre).
+            float t = Mathf.Clamp01(edge / coast);
+            float m = t * t;
 
-            // Far safety backstop only: with the smaller footprint the island already fades to sea well inside the
-            // tile, so this just guarantees no clipping in the rare warp case (sea by ~0.47 of the tile radius).
+            // Far safety backstop only (sea by ~0.49 of the tile radius) — guarantees no tile-edge clipping; the
+            // gentle coast itself comes from the wide taper above, not from this.
             float rad = Mathf.Sqrt((fx - 0.5f) * (fx - 0.5f) + (fy - 0.5f) * (fy - 0.5f));
-            m *= 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.47f, rad));
+            m *= 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.46f, 0.50f, rad));
             return m;
         }
 

@@ -28,7 +28,7 @@ MonoBehaviour:
       time: 0
       value: 0
       inSlope: 0
-      outSlope: 1
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
@@ -36,7 +36,7 @@ MonoBehaviour:
     - serializedVersion: 3
       time: 1
       value: 1
-      inSlope: 1
+      inSlope: 0
       outSlope: 0
       tangentMode: 0
       weightedMode: 0
@@ -48,6 +48,12 @@ MonoBehaviour:
   islandFalloff: 2.7
   heightmapResolution: 513
   terrainSize: {x: 480, y: 200, z: 480}
+  mountainRelief: 0.85
+  reliefFrequency: 11
+  reliefOctaves: 6
+  erosionStrength: 0.6
+  plainsFlatten: 0.85
+  microRoughness: 0.005
   biomes:
   - biome: {fileID: 11400000, guid: b5398c485659c214a9f930d2744cd3c5, type: 2}
     percent: 10
