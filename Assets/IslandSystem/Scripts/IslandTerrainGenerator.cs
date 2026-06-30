@@ -713,21 +713,33 @@ namespace IslandSystem
         }
 
         /// <summary>
-        /// Registers the biomes' tree prefabs (Trees/) as <see cref="TreePrototype"/>s and places them as
-        /// Unity Terrain tree instances — each confined to its biome's elevation band, off the fade zone and
-        /// off slopes the rule's condition rejects. Uses the island <paramref name="seed"/> for determinism.
+        /// Scatters the biomes' tree prefabs (Trees/) as GAMEOBJECTS under a "Trees" holder — each confined to
+        /// its biome's elevation band, off villages/fade, by the rule's condition. Placement is by DENSITY
+        /// (trees per 100 m²), species are picked by weight, and a global no-overlap test keeps trees from
+        /// spawning inside one another. GameObjects (not Terrain tree instances) so per-tree Y-rotation, random
+        /// scale and sink actually apply — URP terrain tree instances ignore rotation and can't sink.
         /// </summary>
         public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             var data = terrain.terrainData;
-            if (bands == null) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); return; }
+            // Drop any legacy terrain-tree instances (we now use GameObjects).
+            if (data.treePrototypes.Length > 0) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); }
+            if (bands == null) return;
+            Vector3 origin = terrain.transform.position;
 
-            // Collect unique tree prefabs across all biomes -> prototypes (+ each one's horizontal footprint
-            // radius, used to keep trees from spawning inside one another).
-            var prototypes = new List<TreePrototype>();
-            var protoIndex = new Dictionary<GameObject, int>();
-            var protoRadius = new List<float>();
-            float maxScale = 0.0001f;
+            // Fresh holder for this terrain's trees.
+            var existing = terrain.transform.Find("Trees");
+            if (existing != null)
+            {
+                if (Application.isPlaying) Object.Destroy(existing.gameObject);
+                else Object.DestroyImmediate(existing.gameObject);
+            }
+            Transform holder = new GameObject("Trees").transform;
+            holder.SetParent(terrain.transform, false);
+
+            // Footprint radius per prefab (for the no-overlap test) + the largest scale (for the grid cell size).
+            var radiusCache = new Dictionary<GameObject, float>();
+            float maxScale = 0.0001f, maxR = 0.2f;
             foreach (var band in bands)
             {
                 if (band.biome == null || band.biome.treeRules == null) continue;
@@ -736,20 +748,17 @@ namespace IslandSystem
                     if (rule == null || rule.prefabs == null) continue;
                     maxScale = Mathf.Max(maxScale, rule.scaleRange.x, rule.scaleRange.y);
                     foreach (var p in rule.prefabs)
-                        if (p != null && !protoIndex.ContainsKey(p))
+                        if (p != null && !radiusCache.ContainsKey(p))
                         {
-                            protoIndex[p] = prototypes.Count;
-                            prototypes.Add(new TreePrototype { prefab = p });
-                            protoRadius.Add(PrototypeRadius(p));
+                            float r = PrototypeRadius(p);
+                            radiusCache[p] = r; maxR = Mathf.Max(maxR, r);
                         }
                 }
             }
-            data.treePrototypes = prototypes.ToArray();
-            if (prototypes.Count == 0) { data.SetTreeInstances(new TreeInstance[0], true); return; }
+            if (radiusCache.Count == 0) return;
 
             // Global no-overlap acceleration grid: a tree is rejected if it lands within (rA+rB)*pack of an
             // already-placed tree, ACROSS all rules/species — so nothing spawns inside another tree.
-            float maxR = 0.2f; foreach (var r in protoRadius) maxR = Mathf.Max(maxR, r);
             float cell = Mathf.Max(1f, maxR * maxScale * 2f);
             const float pack = 0.8f;
             var occ = new Dictionary<long, List<Vector3>>();    // cell -> list of (worldX, worldZ, radius)
@@ -775,7 +784,6 @@ namespace IslandSystem
                 list.Add(new Vector3(wx, wz, r));
             }
 
-            var instances = new List<TreeInstance>();
             int bi = 0;
             foreach (var band in bands)
             {
@@ -810,32 +818,34 @@ namespace IslandSystem
                             // Soft edge: thin out toward the condition's limits instead of a hard cut.
                             if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
 
-                            // Pick the species by weight (the mix ratio), then size + footprint.
+                            // Pick the species by weight (the mix ratio), then its random size + footprint.
                             int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
                             var prefab = rule.prefabs[idx];
-                            if (prefab == null || !protoIndex.TryGetValue(prefab, out int pi)) continue;
+                            if (prefab == null || !radiusCache.TryGetValue(prefab, out float pr)) continue;
                             float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                            if (s <= 0f) s = 1f;
 
                             float wx = u * data.size.x, wz = v * data.size.z;
-                            float radius = protoRadius[pi] * s;
-                            if (TooClose(wx, wz, radius)) continue; // would spawn inside another tree
-                            Register(wx, wz, radius);
+                            if (TooClose(wx, wz, pr * s)) continue;  // would spawn inside another tree
+                            Register(wx, wz, pr * s);
 
-                            instances.Add(new TreeInstance
-                            {
-                                position = new Vector3(u, height01, v), // normalized; snapped to heightmap by Unity
-                                prototypeIndex = pi,
-                                widthScale = s,
-                                heightScale = s,
-                                rotation = rule.randomYRotation ? (float)rng.NextDouble() * Mathf.PI * 2f : 0f,
-                                color = Color.white,
-                                lightmapColor = Color.white
-                            });
+                            // Instantiate the tree GameObject and apply position (sunk), rotation and scale.
+                            // Plain Instantiate (not PrefabUtility) — far faster for thousands of procedural trees.
+                            Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(u, v) - rule.sink, wz);
+                            GameObject go = Object.Instantiate(prefab, holder);
+                            go.transform.position = worldPos;
+
+                            Quaternion rot = rule.alignToNormal
+                                ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v))
+                                : Quaternion.identity;
+                            if (rule.randomYRotation)
+                                rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                            go.transform.rotation = rot;
+                            go.transform.localScale = go.transform.localScale * s;
                         }
                     }
                 }
             }
-            data.SetTreeInstances(instances.ToArray(), true);
         }
 
         /// <summary>Approx horizontal footprint radius (world units) of a prefab from its mesh bounds × scale.</summary>
