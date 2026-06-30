@@ -62,7 +62,17 @@ MonoBehaviour:
       maxSlope: 0
       heightBlend: 0
       slopeBlend: 0
-    weight: 0
+    weight: 40
+  - label: 
+    terrainLayer: {fileID: 8574412962073106934, guid: 10f1a35918873134bb8d8b833de1e027, type: 2}
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 0
+      heightBlend: 0
+      slopeBlend: 0
+    weight: 60
   spawnRules: []
   treeRules: []
   rockRules: []

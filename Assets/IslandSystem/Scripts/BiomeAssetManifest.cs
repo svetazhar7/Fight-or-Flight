@@ -121,11 +121,20 @@ namespace IslandSystem
     public class ObjectSpawnRule
     {
         public string label = "objects";
-        [Tooltip("Pool to pick from; one is chosen at random per instance.")]
+        [Tooltip("Pool to pick from; one is chosen per instance. For trees this is the SPECIES list — put " +
+                 "several tree prefabs here and weight their mix with prefabWeights.")]
         public GameObject[] prefabs = Array.Empty<GameObject>();
 
-        [Tooltip("How many instances to attempt to place on each island.")]
+        [Tooltip("Optional selection weights, parallel to prefabs (the species ratio). Empty/all-zero = equal. " +
+                 "E.g. prefabs [Pine, Birch] with weights [70, 30] => ~70% pine, 30% birch.")]
+        public float[] prefabWeights = Array.Empty<float>();
+
+        [Tooltip("How many instances to attempt to place on each island. Used by rocks/props.")]
         [Min(0)] public int count = 50;
+
+        [Tooltip("TREES: density in instances per 100 m² of eligible ground. The spacing between trees is " +
+                 "derived from this (≈ 10/sqrt(density) metres). Used instead of count for tree placement.")]
+        [Min(0f)] public float density = 2f;
 
         public PlacementCondition where = PlacementCondition.Range(0.1f, 1f, 0f, 30f);
 
@@ -220,6 +229,9 @@ namespace IslandSystem
         public Vector3 terrainSize = new Vector3(500f, 150f, 500f);
 
         [Header("Texturing — condition-driven layers")]
+        [Tooltip("When a biome has several texture layers they're laid out as PATCHES (each covers ~its weight's " +
+                 "share of the area). This is the patch density: higher = more, smaller patches. 0 = use default.")]
+        public float texturePatchScale = 6f;
         public List<BiomeTextureLayer> textureLayers = new List<BiomeTextureLayer>();
 
         [Header("Objects — condition-driven spawn rules (from Props/)")]

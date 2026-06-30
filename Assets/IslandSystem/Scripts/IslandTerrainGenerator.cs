@@ -407,22 +407,66 @@ namespace IslandSystem
             int n = entries.Count;
             float[] edges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
 
-            // Terrain layers + band records. (GetBiomeLayer may create debug-layer ASSETS, which can revert
-            // the not-yet-saved TerrainData asset — so we configure `data` only AFTER this, at the very end.)
-            var layers = new TerrainLayer[n];
+            // Terrain layers — a biome can blend SEVERAL textures by weight (%). Build a flat, de-duplicated
+            // layer list, and for each biome remember which channels it uses + their weights/conditions so the
+            // biome's band can be split across them. (GetOrCreateDebugLayer may create ASSETS that revert the
+            // unsaved TerrainData, so `data` is configured LAST.)
+            var allLayers = new List<TerrainLayer>();
+            var layerIndex = new Dictionary<TerrainLayer, int>();
+            var subChan = new List<int>[n];
+            var subW = new List<float>[n];
+            var subWhere = new List<PlacementCondition>[n];
             for (int k = 0; k < n; k++)
             {
-                layers[k] = GetBiomeLayer(entries[k].biome);
-                bands.Add(new BiomeBand { biome = entries[k].biome, lo = edges[k], hi = edges[k + 1] });
+                var biome = entries[k].biome;
+                subChan[k] = new List<int>(); subW[k] = new List<float>(); subWhere[k] = new List<PlacementCondition>();
+
+                var valid = new List<BiomeTextureLayer>();
+                if (biome.textureLayers != null)
+                    foreach (var l in biome.textureLayers)
+                        if (l != null && l.terrainLayer != null) valid.Add(l);
+
+                if (valid.Count == 0)
+                {
+                    // No real textures yet: one solid debug-colour layer for the whole biome.
+                    allLayers.Add(GetOrCreateDebugLayer(biome));
+                    subChan[k].Add(allLayers.Count - 1); subW[k].Add(1f); subWhere[k].Add(PlacementCondition.Everywhere);
+                }
+                else
+                {
+                    float sumRaw = 0f;
+                    foreach (var l in valid) sumRaw += Mathf.Max(0f, l.weight);
+                    bool equal = sumRaw <= 0.0001f; // all weights left at 0 => blend the textures evenly
+                    foreach (var l in valid)
+                    {
+                        if (!layerIndex.TryGetValue(l.terrainLayer, out int ch))
+                        {
+                            ch = allLayers.Count; allLayers.Add(l.terrainLayer); layerIndex[l.terrainLayer] = ch;
+                        }
+                        subChan[k].Add(ch);
+                        subW[k].Add(equal ? 1f : Mathf.Max(0f, l.weight));
+                        subWhere[k].Add(l.where);
+                    }
+                }
+                bands.Add(new BiomeBand { biome = biome, lo = edges[k], hi = edges[k + 1] });
             }
+            int layerCount = allLayers.Count;
 
             // ---- Villages: pick sites + FLATTEN the heightmap array now, before the splat & SetHeights so
             // the levelled ground is what gets textured and committed. ----
             ChooseAndFlattenVillages(heights, hmRes, size, bands, waterlineNormalized, seed, villages);
 
-            // Paint splatmap by band with soft edges.
+            int maxSub = 1;
+            for (int k = 0; k < n; k++) maxSub = Mathf.Max(maxSub, subChan[k].Count);
+            var eff = new float[maxSub];
+            float patchSeed = shape.seedOffset * 0.91f + 123.4f;
+
+            // Paint splatmap: biome band membership, then within each biome carve PATCHES of its textures from a
+            // Perlin field — each texture covers ~its weight's share of the biome AREA, but in spatially-coherent
+            // regions (e.g. snow showing up "местами" on the mountains), not a uniform mixed-grey blend. A
+            // texture's `where` (height/slope) further restricts WHERE its patches can appear.
             const int aw = 256;
-            var maps = new float[aw, aw, n];
+            var maps = new float[aw, aw, layerCount];
             const float blend = 0.03f;
             for (int y = 0; y < aw; y++)
             {
@@ -430,21 +474,42 @@ namespace IslandSystem
                 {
                     float nx = (float)x / (aw - 1);
                     float ny = (float)y / (aw - 1);
-                    float h = SampleGrid(heights, nx, ny); // height (already normalized 0..1)
+                    float h = SampleGrid(heights, nx, ny);     // height (already normalized 0..1)
+                    float slope = SlopeAt(heights, nx, ny, size, hmRes);
 
                     // Cumulative band membership: weight_k = (fraction at/above edge[k]) - (… above edge[k+1]).
-                    // This telescopes to a partition of unity, so cells sitting exactly on an edge split
-                    // smoothly between neighbours instead of collapsing to zero (critical for terraced terrain).
+                    // Telescopes to a partition of unity, so cells on an edge split smoothly between neighbours.
                     float total = 0f;
                     for (int k = 0; k < n; k++)
                     {
                         float cumLow = (k == 0) ? 1f : AboveEdge(h, edges[k], blend);
                         float cumHigh = (k == n - 1) ? 0f : AboveEdge(h, edges[k + 1], blend);
-                        float w = Mathf.Clamp01(cumLow - cumHigh);
-                        maps[y, x, k] = w;
-                        total += w;
+                        float wBiome = Mathf.Clamp01(cumLow - cumHigh);
+                        if (wBiome <= 0f) continue;
+                        total += wBiome;
+
+                        var chans = subChan[k]; var ws = subW[k]; var wheres = subWhere[k];
+                        int sc = chans.Count;
+                        if (sc == 1) { maps[y, x, chans[0]] += wBiome; continue; }
+
+                        // Area share each texture wants here (weight × where condition).
+                        float sumEff = 0f;
+                        for (int j = 0; j < sc; j++) { eff[j] = ws[j] * TextureConditionWeight(wheres[j], h, slope); sumEff += eff[j]; }
+                        if (sumEff <= 0.0001f) { maps[y, x, chans[0]] += wBiome; continue; }
+
+                        // Carve patches: partition the [0,1] noise value into per-texture segments sized by share.
+                        float pfreq = entries[k].biome.texturePatchScale > 0.01f ? entries[k].biome.texturePatchScale : PatchFrequency;
+                        float nval = PatchNoise(nx, ny, pfreq, patchSeed + k * 37.7f);
+                        float acc = 0f;
+                        for (int j = 0; j < sc; j++)
+                        {
+                            float lo = acc / sumEff; acc += eff[j]; float hi = acc / sumEff;
+                            float memb = (j == 0 ? 1f : AboveEdge(nval, lo, PatchBlend))
+                                       - (j == sc - 1 ? 0f : AboveEdge(nval, hi, PatchBlend));
+                            if (memb > 0f) maps[y, x, chans[j]] += wBiome * Mathf.Clamp01(memb);
+                        }
                     }
-                    if (total > 0.0001f) { for (int k = 0; k < n; k++) maps[y, x, k] /= total; }
+                    if (total > 0.0001f) { float inv = 1f / total; for (int c = 0; c < layerCount; c++) maps[y, x, c] *= inv; }
                     else maps[y, x, 0] = 1f;
                 }
             }
@@ -453,7 +518,7 @@ namespace IslandSystem
             data.heightmapResolution = hmRes;
             data.size = size;
             data.alphamapResolution = aw;
-            data.terrainLayers = layers;
+            data.terrainLayers = allLayers.ToArray();
             data.SetHeights(0, 0, heights);
             data.SetAlphamaps(0, 0, maps);
         }
@@ -475,6 +540,22 @@ namespace IslandSystem
         /// <summary>Smooth cumulative weight at/above edge <paramref name="e"/>: 0.5 at h==e, →1 above, →0 below.</summary>
         static float AboveEdge(float h, float e, float blend)
             => Mathf.SmoothStep(0f, 1f, (h - e) / (2f * blend) + 0.5f);
+
+        /// <summary>Base spatial frequency of the texture-patch field (≈ how many patches across the tile).</summary>
+        const float PatchFrequency = 6f;
+        /// <summary>Soft-edge width of a texture patch, in noise-value units (bigger = softer patch borders).</summary>
+        const float PatchBlend = 0.04f;
+
+        /// <summary>2-octave Perlin in 0..1 used to lay out texture patches within a biome.</summary>
+        static float PatchNoise(float fx, float fy, float freq, float seedOffset)
+        {
+            float a = Mathf.PerlinNoise(fx * freq + seedOffset, fy * freq + seedOffset * 0.7f + 5.3f);
+            float b = Mathf.PerlinNoise(fx * freq * 2.3f + seedOffset * 1.7f + 11.1f, fy * freq * 2.3f + seedOffset * 0.3f + 19.7f);
+            float v = a * 0.7f + b * 0.3f;
+            // Mathf.PerlinNoise clusters around ~0.5; stretch its typical range to fill 0..1 so the per-texture
+            // noise segments (sized by weight) actually map to ~their share of the area.
+            return Mathf.Clamp01(Mathf.InverseLerp(0.30f, 0.70f, v));
+        }
 
         static float Quantile(List<float> sorted, float p)
         {
@@ -553,11 +634,15 @@ namespace IslandSystem
 
         // ---- Condition helpers -------------------------------------------
 
-        /// <summary>0..1 membership of a point (given its height &amp; slope) in a placement condition.</summary>
+        /// <summary>
+        /// 0..1 membership of a point (given its height &amp; slope) in a placement condition. An empty/unset
+        /// range (max &lt;= min, e.g. a default-zeroed condition) means "no restriction on that axis" — otherwise
+        /// a degenerate condition rejects everything (the bug that stopped trees/objects spawning).
+        /// </summary>
         public static float ConditionWeight(PlacementCondition c, float height01, float slopeDeg)
         {
-            float hw = Band(height01, c.minHeight, c.maxHeight, Mathf.Max(0.0001f, c.heightBlend));
-            float sw = Band(slopeDeg, c.minSlope, c.maxSlope, Mathf.Max(0.0001f, c.slopeBlend));
+            float hw = (c.maxHeight <= c.minHeight + 1e-4f) ? 1f : Band(height01, c.minHeight, c.maxHeight, Mathf.Max(0.0001f, c.heightBlend));
+            float sw = (c.maxSlope <= c.minSlope + 1e-4f) ? 1f : Band(slopeDeg, c.minSlope, c.maxSlope, Mathf.Max(0.0001f, c.slopeBlend));
             return hw * sw;
         }
 
@@ -569,6 +654,30 @@ namespace IslandSystem
         {
             float rising = Mathf.SmoothStep(0f, 1f, (v - min) / blend);
             float falling = Mathf.SmoothStep(0f, 1f, (max - v) / blend);
+            return Mathf.Clamp01(Mathf.Min(rising, falling));
+        }
+
+        /// <summary>
+        /// Condition weight for TEXTURE blending. Like <see cref="ConditionWeight"/> but the soft fade is
+        /// skipped at the domain boundaries, so a full-range "Everywhere" condition returns 1 everywhere (a
+        /// plain percentage blend), while a restricted height/slope band still masks the texture.
+        /// </summary>
+        static float TextureConditionWeight(PlacementCondition c, float height01, float slopeDeg)
+        {
+            // An empty/unset range (max <= min, e.g. a default-zeroed condition) means "no restriction" — the
+            // layer participates everywhere in the biome and the blend is driven purely by its weight (%).
+            float hw = (c.maxHeight <= c.minHeight + 1e-4f)
+                ? 1f : BandOpen(height01, c.minHeight, c.maxHeight, Mathf.Max(0.0001f, c.heightBlend), 0f, 1f);
+            float sw = (c.maxSlope <= c.minSlope + 1e-4f)
+                ? 1f : BandOpen(slopeDeg, c.minSlope, c.maxSlope, Mathf.Max(0.0001f, c.slopeBlend), 0f, 90f);
+            return hw * sw;
+        }
+
+        /// <summary>As <see cref="Band"/>, but no fade where an edge sits on the domain limit (full range = 1).</summary>
+        static float BandOpen(float v, float min, float max, float blend, float domainMin, float domainMax)
+        {
+            float rising = (min <= domainMin + 1e-4f) ? 1f : Mathf.SmoothStep(0f, 1f, (v - min) / blend);
+            float falling = (max >= domainMax - 1e-4f) ? 1f : Mathf.SmoothStep(0f, 1f, (max - v) / blend);
             return Mathf.Clamp01(Mathf.Min(rising, falling));
         }
 
@@ -613,25 +722,58 @@ namespace IslandSystem
             var data = terrain.terrainData;
             if (bands == null) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); return; }
 
-            // Collect unique tree prefabs across all biomes -> prototypes.
+            // Collect unique tree prefabs across all biomes -> prototypes (+ each one's horizontal footprint
+            // radius, used to keep trees from spawning inside one another).
             var prototypes = new List<TreePrototype>();
             var protoIndex = new Dictionary<GameObject, int>();
+            var protoRadius = new List<float>();
+            float maxScale = 0.0001f;
             foreach (var band in bands)
             {
                 if (band.biome == null || band.biome.treeRules == null) continue;
                 foreach (var rule in band.biome.treeRules)
                 {
                     if (rule == null || rule.prefabs == null) continue;
+                    maxScale = Mathf.Max(maxScale, rule.scaleRange.x, rule.scaleRange.y);
                     foreach (var p in rule.prefabs)
                         if (p != null && !protoIndex.ContainsKey(p))
                         {
                             protoIndex[p] = prototypes.Count;
                             prototypes.Add(new TreePrototype { prefab = p });
+                            protoRadius.Add(PrototypeRadius(p));
                         }
                 }
             }
             data.treePrototypes = prototypes.ToArray();
             if (prototypes.Count == 0) { data.SetTreeInstances(new TreeInstance[0], true); return; }
+
+            // Global no-overlap acceleration grid: a tree is rejected if it lands within (rA+rB)*pack of an
+            // already-placed tree, ACROSS all rules/species — so nothing spawns inside another tree.
+            float maxR = 0.2f; foreach (var r in protoRadius) maxR = Mathf.Max(maxR, r);
+            float cell = Mathf.Max(1f, maxR * maxScale * 2f);
+            const float pack = 0.8f;
+            var occ = new Dictionary<long, List<Vector3>>();    // cell -> list of (worldX, worldZ, radius)
+            long Key(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
+            bool TooClose(float wx, float wz, float r)
+            {
+                int cx = Mathf.FloorToInt(wx / cell), cz = Mathf.FloorToInt(wz / cell);
+                for (int dx = -1; dx <= 1; dx++)
+                    for (int dz = -1; dz <= 1; dz++)
+                        if (occ.TryGetValue(Key(cx + dx, cz + dz), out var list))
+                            foreach (var t in list)
+                            {
+                                float md = (r + t.z) * pack;
+                                float ex = t.x - wx, ez = t.y - wz;
+                                if (ex * ex + ez * ez < md * md) return true;
+                            }
+                return false;
+            }
+            void Register(float wx, float wz, float r)
+            {
+                long k = Key(Mathf.FloorToInt(wx / cell), Mathf.FloorToInt(wz / cell));
+                if (!occ.TryGetValue(k, out var list)) { list = new List<Vector3>(); occ[k] = list; }
+                list.Add(new Vector3(wx, wz, r));
+            }
 
             var instances = new List<TreeInstance>();
             int bi = 0;
@@ -643,38 +785,89 @@ namespace IslandSystem
                 foreach (var rule in band.biome.treeRules)
                 {
                     ruleIndex++;
-                    if (rule == null || !rule.IsValid) continue;
+                    if (rule == null || rule.prefabs == null || rule.prefabs.Length == 0) continue;
+
+                    // DENSITY-based placement: trees per 100 m² -> a spacing of ≈10/sqrt(density) metres. A jittered
+                    // grid at that spacing gives roughly that density; each candidate is gated to the biome band,
+                    // off villages/fade, by the rule's condition, AND by the global no-overlap check.
+                    float density = rule.density > 0f ? rule.density : 2f;
+                    float spacing = 10f / Mathf.Sqrt(density);
+                    int gx = Mathf.Max(1, Mathf.CeilToInt(data.size.x / spacing));
+                    int gz = Mathf.Max(1, Mathf.CeilToInt(data.size.z / spacing));
                     var rng = new System.Random((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663);
-                    int placed = 0, guard = rule.count * 12;
-                    while (placed < rule.count && guard-- > 0)
+                    const float jitter = 0.8f;
+
+                    for (int iz = 0; iz < gz; iz++)
                     {
-                        float u = (float)rng.NextDouble();
-                        float v = (float)rng.NextDouble();
-                        if (InAnyVillage(u, v, data.size, villages)) continue;
-                        float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                        if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
-                        float slopeDeg = data.GetSteepness(u, v);
-                        if (ConditionWeight(rule.where, height01, slopeDeg) <= 0.001f) continue;
-
-                        var prefab = rule.prefabs[rng.Next(rule.prefabs.Length)];
-                        if (prefab == null || !protoIndex.TryGetValue(prefab, out int pi)) continue;
-
-                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        instances.Add(new TreeInstance
+                        for (int ix = 0; ix < gx; ix++)
                         {
-                            position = new Vector3(u, height01, v), // normalized; snapped to heightmap below
-                            prototypeIndex = pi,
-                            widthScale = s,
-                            heightScale = s,
-                            rotation = rule.randomYRotation ? (float)rng.NextDouble() * Mathf.PI * 2f : 0f,
-                            color = Color.white,
-                            lightmapColor = Color.white
-                        });
-                        placed++;
+                            float u = Mathf.Clamp01((ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gx);
+                            float v = Mathf.Clamp01((iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gz);
+                            if (InAnyVillage(u, v, data.size, villages)) continue;
+                            float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
+                            if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
+                            float slopeDeg = data.GetSteepness(u, v);
+                            // Soft edge: thin out toward the condition's limits instead of a hard cut.
+                            if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
+
+                            // Pick the species by weight (the mix ratio), then size + footprint.
+                            int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
+                            var prefab = rule.prefabs[idx];
+                            if (prefab == null || !protoIndex.TryGetValue(prefab, out int pi)) continue;
+                            float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+
+                            float wx = u * data.size.x, wz = v * data.size.z;
+                            float radius = protoRadius[pi] * s;
+                            if (TooClose(wx, wz, radius)) continue; // would spawn inside another tree
+                            Register(wx, wz, radius);
+
+                            instances.Add(new TreeInstance
+                            {
+                                position = new Vector3(u, height01, v), // normalized; snapped to heightmap by Unity
+                                prototypeIndex = pi,
+                                widthScale = s,
+                                heightScale = s,
+                                rotation = rule.randomYRotation ? (float)rng.NextDouble() * Mathf.PI * 2f : 0f,
+                                color = Color.white,
+                                lightmapColor = Color.white
+                            });
+                        }
                     }
                 }
             }
             data.SetTreeInstances(instances.ToArray(), true);
+        }
+
+        /// <summary>Approx horizontal footprint radius (world units) of a prefab from its mesh bounds × scale.</summary>
+        static float PrototypeRadius(GameObject prefab)
+        {
+            if (prefab == null) return 0.5f;
+            bool any = false; Bounds b = default;
+            foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                var e = mf.sharedMesh.bounds.extents; var s = mf.transform.lossyScale;
+                var wb = new Bounds(Vector3.zero, new Vector3(Mathf.Abs(e.x * s.x), Mathf.Abs(e.y * s.y), Mathf.Abs(e.z * s.z)) * 2f);
+                if (!any) { b = wb; any = true; } else b.Encapsulate(wb);
+            }
+            return any ? Mathf.Max(0.2f, Mathf.Max(b.extents.x, b.extents.z)) : 0.5f;
+        }
+
+        /// <summary>Weighted random index into a pool of <paramref name="count"/> items (the species mix ratio).</summary>
+        static int PickWeighted(float[] weights, int count, System.Random rng)
+        {
+            if (count <= 1) return 0;
+            if (weights == null || weights.Length == 0) return rng.Next(count);
+            float total = 0f;
+            for (int i = 0; i < count; i++) total += (i < weights.Length ? Mathf.Max(0f, weights[i]) : 0f);
+            if (total <= 0.0001f) return rng.Next(count); // all-zero weights -> equal mix
+            float r = (float)rng.NextDouble() * total, acc = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                acc += (i < weights.Length ? Mathf.Max(0f, weights[i]) : 0f);
+                if (r <= acc) return i;
+            }
+            return count - 1;
         }
 
         /// <summary>
