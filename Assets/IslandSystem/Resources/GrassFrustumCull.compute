@@ -1,0 +1,33 @@
+// GPU frustum culling for the instanced grass (Cyanilux "GPU Instanced Grass" indirect setup).
+// Tests every instance's world position against the camera frustum in CLIP space and appends the ids
+// of visible ones to _VisibleIDsAppend. The append counter is then CopyCount'ed into the indirect-args
+// instanceCount, so Graphics.RenderMeshIndirect draws only what the camera can see.
+// Lives in Resources/ so IslandGrassField can Resources.Load it at runtime (no AssetDatabase — multiplayer-safe).
+#pragma kernel FrustumCullInstances
+
+StructuredBuffer<float4x4> _PerInstanceData;   // per-instance WORLD matrices (same buffer the grass shader reads)
+AppendStructuredBuffer<uint> _VisibleIDsAppend; // out: indices of instances inside the frustum
+
+float4x4 _Matrix;          // view-projection (OpenGL convention — raw cam.projectionMatrix * worldToCameraMatrix)
+float _MaxDrawDistance;    // optional cap on clip-space W (distance from camera)
+uint _InstanceCount;       // guard: dispatch is rounded up to 64, extra threads must not append garbage
+
+[numthreads(64, 1, 1)]
+void FrustumCullInstances (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _InstanceCount) return;
+
+    float4x4 m = _PerInstanceData[id.x];
+    // Instance world position from the matrix translation column -> clip space.
+    float4 absPosCS = abs(mul(_Matrix, float4(m._m03_m13_m23, 1.0)));
+
+    // Inside the frustum cube (-w..w in OpenGL convention). XY padded so clumps whose ROOT is just
+    // off-screen (but whose blades reach in) don't pop at the screen edges.
+    if (absPosCS.x <= absPosCS.w * 1.1 + 1.0 &&
+        absPosCS.y <= absPosCS.w * 1.1 + 1.0 &&
+        absPosCS.z <= absPosCS.w &&
+        absPosCS.w <= _MaxDrawDistance)
+    {
+        _VisibleIDsAppend.Append(id.x);
+    }
+}

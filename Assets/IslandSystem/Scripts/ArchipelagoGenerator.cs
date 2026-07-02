@@ -230,6 +230,17 @@ namespace IslandSystem
             marker.climateZone = def.climateZone;
             marker.islandType = def.islandType;
             marker.level = level;
+            foreach (var b in bands) marker.bands.Add(new IslandBand { biome = b.biome, lo = b.lo, hi = b.hi });
+
+            // Procedural grass: attach a streamer that builds grass in CHUNKS around the camera (only if any
+            // biome has grass layers). Nothing is built until the camera is near — cheap on huge islands.
+            if (GrassGenerator.HasAnyGrass(marker.bands))
+            {
+                var field = go.AddComponent<IslandGrassField>();
+                field.terrain = terrain;
+                field.seed = seed;
+                field.waterline = waterline;
+            }
         }
 
         // ---- Palettes -----------------------------------------------------

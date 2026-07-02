@@ -70,8 +70,8 @@ MonoBehaviour:
     prefabs:
     - {fileID: 919132149155446097, guid: 2346e0f58e2154a4aaa041fc6d0c8486, type: 3}
     prefabWeights: []
-    count: 10
-    density: 18.89
+    count: 3
+    density: 2
     where:
       minHeight: 0
       maxHeight: 0
@@ -103,3 +103,22 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
+  grassLayers:
+  - enabled: 1
+    name: moss_pale
+    density: 700
+    prefab: {fileID: 919132149155446097, guid: f2b34b06f0cc90d4dba21d41a5ebc55d, type: 3}
+    prefabScaleRange: {x: 0.8, y: 1.5}
+    layFlat: 0
+    alphaCutoff: 0.3
+    windStrength: 0.06
+    windSpeed: 1
+    windScale: 0.15
+    bendStrength: 0.5
+    where:
+      minHeight: 0
+      maxHeight: 1
+      minSlope: 0
+      maxSlope: 28
+      heightBlend: 0.08
+      slopeBlend: 10

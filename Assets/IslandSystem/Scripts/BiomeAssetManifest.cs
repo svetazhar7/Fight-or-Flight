@@ -186,6 +186,54 @@ namespace IslandSystem
     }
 
     /// <summary>
+    /// Per-biome grass: drives the procedural grass field (IslandSystem/Grass shader). Each biome can have its
+    /// own colour, density, size and wind so the look varies per biome (e.g. lush green meadow vs sparse tundra).
+    /// </summary>
+    [Serializable]
+    public class GrassSettings
+    {
+        public bool enabled = true;
+        [Tooltip("Layer name, e.g. \"grass\", \"moss\", \"lichen\", \"flowers\".")]
+        public string name = "grass";
+        [Tooltip("Instances per 100 m² of eligible ground. Rendered GPU-instanced (RenderMeshInstanced), streamed near the camera.")]
+        [Min(0f)] public float density = 200f;
+
+        [Header("Prefab (the mesh that gets GPU-instanced)")]
+        [Tooltip("Foliage PREFAB — grass blade/clump, moss patch, lichen, flower, etc. Its mesh is instanced; " +
+                 "its material's texture is used with the wind/flatten grass shader.")]
+        public GameObject prefab;
+        [Tooltip("Uniform scale range per instance.")]
+        public Vector2 prefabScaleRange = new Vector2(0.85f, 1.25f);
+        [Tooltip("Lay the instance FLAT on the ground, oriented to the slope (for MOSS / LICHEN). Off = upright.")]
+        public bool layFlat = false;
+        [Tooltip("Alpha below this is cut away (for textured prefabs).")]
+        [Range(0f, 1f)] public float alphaCutoff = 0.3f;
+
+        [Header("Look (Cyanilux-style gradient)")]
+        [Tooltip("Tint at the blade ROOT (multiplied over the texture). White = texture colour as-is (moss etc).")]
+        public Color bottomColor = Color.white;
+        [Tooltip("Tint at the blade TIP. Lighter than bottom gives the classic stylized-grass gradient.")]
+        public Color topColor = Color.white;
+        [Tooltip("The texture is an NxN atlas of blade variants; each instance picks a random tile. 1 = whole texture.")]
+        [Min(1)] public int textureTiles = 1;
+
+        [Header("Wind")]
+        [Range(0f, 1f)] public float windStrength = 0.12f;
+        public float windSpeed = 1f;
+        [Tooltip("Spatial frequency of the wind waves (lower = broader gusts).")]
+        public float windScale = 0.15f;
+
+        [Header("Interaction")]
+        [Tooltip("How hard the grass flattens under players/interactors. (0 for flat moss.)")]
+        [Range(0f, 2f)] public float bendStrength = 1f;
+
+        [Tooltip("Where it grows: height band (0..1) + slope (deg). Default = low/flat ground.")]
+        public PlacementCondition where = PlacementCondition.Range(0f, 1f, 0f, 28f);
+
+        public bool IsValid => enabled && density > 0f && prefab != null;
+    }
+
+    /// <summary>
     /// A biome is a conditional template for an island: how tall/shaped it is (height block), what it is
     /// painted with (condition-driven texture layers) and what spawns on it (condition-driven object
     /// rules). The art lists are normally filled by the "Scan Biome Folder" button; conditions are tuned
@@ -245,6 +293,11 @@ namespace IslandSystem
 
         [Header("Village — flattened build zones (buildings from Buildings/)")]
         public VillageSettings village = new VillageSettings();
+
+        [Header("Grass — procedural grass field (IslandSystem/Grass shader)")]
+        [Tooltip("Grass layers for this biome — add several (e.g. a flat moss base + upright grass + flowers). " +
+                 "Each layer is a prefab or a texture card, streamed only near the camera.")]
+        public List<GrassSettings> grassLayers = new List<GrassSettings>();
 
         /// <summary>The non-null TerrainLayers in author order — this is what the TerrainData uses.</summary>
         public TerrainLayer[] CollectTerrainLayers()
