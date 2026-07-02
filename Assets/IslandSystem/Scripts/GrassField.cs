@@ -26,14 +26,16 @@ namespace IslandSystem
         public float waterline = 0.03f;
         [Tooltip("World size of a grass chunk (metres).")]
         public float chunkSize = 18f;
-        [Tooltip("Grass exists within this radius of the viewer (metres).")]
-        public float viewDistance = 55f;
+        [Tooltip("Grass exists within this radius of the viewer (metres). The shader fades blades out just " +
+                 "before this so the field dissolves smoothly instead of ending in a hard square.")]
+        public float viewDistance = 90f;
         [Tooltip("Max chunks built per update, so streaming in doesn't hitch.")]
-        public int buildsPerTick = 2;
+        public int buildsPerTick = 4;
 
         readonly Dictionary<long, List<GrassBatch>> _chunks = new Dictionary<long, List<GrassBatch>>();
         List<IslandBand> _bands;
         int _builtThisTick;
+        int _chunksVersion = -1;   // GrassGenerator.CacheVersion the current chunks were built with
 
         // ---- GPU frustum culling (GrassFrustumCull.compute, loaded from Resources — runtime/multiplayer-safe) ----
         static ComputeShader _cullCS;
@@ -57,6 +59,8 @@ namespace IslandSystem
         static readonly int PropMatrix        = Shader.PropertyToID("_Matrix");
         static readonly int PropMaxDist       = Shader.PropertyToID("_MaxDrawDistance");
         static readonly int PropCount         = Shader.PropertyToID("_InstanceCount");
+        static readonly int PropFadeStart     = Shader.PropertyToID("_FadeStart");
+        static readonly int PropFadeEnd       = Shader.PropertyToID("_FadeEnd");
 
         List<IslandBand> Bands
         {
@@ -93,10 +97,10 @@ namespace IslandSystem
             for (int i = 0; i < list.Count; i++) list[i].Dispose();
         }
 
-        void LateUpdate() { if (Application.isPlaying) Stream(ViewerPos()); }
+        void LateUpdate() { if (Application.isPlaying) Stream(ViewerPos(), ViewerCamera()); }
 
 #if UNITY_EDITOR
-        void EditorTick() { if (this == null || Application.isPlaying) return; Stream(ViewerPos()); }
+        void EditorTick() { if (this == null || Application.isPlaying) return; Stream(ViewerPos(), ViewerCamera()); }
 #endif
 
         Vector3 ViewerPos()
@@ -113,8 +117,21 @@ namespace IslandSystem
             return c != null ? c.transform.position : transform.position;
         }
 
-        /// <summary>Force streaming around an explicit viewer position (tests / cutscenes).</summary>
-        public void RefreshAround(Vector3 v) { Stream(v); }
+        /// <summary>The camera whose FRUSTUM gates which chunks get built (grass only builds where you look).</summary>
+        Camera ViewerCamera()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                var sv = UnityEditor.SceneView.lastActiveSceneView;
+                if (sv != null && sv.camera != null) return sv.camera;
+            }
+#endif
+            return Camera.main;
+        }
+
+        /// <summary>Force streaming around an explicit viewer position (tests / cutscenes). Builds a full disk.</summary>
+        public void RefreshAround(Vector3 v) { Stream(v, null); }
 
         // ---- Draw: GPU frustum cull + RenderMeshIndirect for each chunk-layer, per camera (edit + play) ----
         void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
@@ -130,7 +147,9 @@ namespace IslandSystem
                 // convention Unity uses by default. Instance matrices are world-space, so VP is enough (no M).
                 vp = cam.projectionMatrix * cam.worldToCameraMatrix;
             }
-            float maxDist = viewDistance + chunkSize * 2f; // a bit past the streamed ring so edges never pop early
+            // Generous cap: blades VANISH via the per-instance distance fade in the vertex shader, not a hard
+            // cut here — a tight 3D-distance cap drew a visible arc when the camera flew above the field.
+            float maxDist = viewDistance * 4f;
 
             foreach (var kv in _chunks)
             {
@@ -169,9 +188,19 @@ namespace IslandSystem
             }
         }
 
-        void Stream(Vector3 viewerPos)
+        void Stream(Vector3 viewerPos, Camera cam)
         {
             if (terrain == null || Bands == null || Bands.Count == 0) return;
+
+            // Settings changed somewhere (GrassGenerator.ClearCache bumped the version): flush ALL chunks so
+            // nothing keeps a stale material — otherwise old and new chunks sit side by side with different
+            // colours and a hard seam shows along the chunk grid. Rebuilt over the next ticks.
+            if (_chunksVersion != GrassGenerator.CacheVersion)
+            {
+                DisposeAll();
+                _chunksVersion = GrassGenerator.CacheVersion;
+            }
+
             _builtThisTick = 0;
 
             Vector3 origin = terrain.transform.position;
@@ -180,6 +209,22 @@ namespace IslandSystem
             int cvz = Mathf.FloorToInt((viewerPos.z - origin.z) / chunkSize);
             int r = Mathf.CeilToInt(viewDistance / chunkSize);
             float keepR2 = (viewDistance + chunkSize) * (viewDistance + chunkSize);
+            float innerR2 = (2f * chunkSize) * (2f * chunkSize);
+
+            // Camera frustum planes (slightly padded): chunks are only BUILT where the player is looking, so
+            // the budget goes into a deep wedge along the view instead of a disk wasted behind the back.
+            // Already-built chunks are KEPT by distance (no rebuild churn when spinning the camera).
+            Plane[] planes = null;
+            if (cam != null)
+            {
+                planes = GeometryUtility.CalculateFrustumPlanes(cam);
+                for (int i = 0; i < planes.Length; i++)
+                {
+                    var pl = planes[i];
+                    pl.distance += chunkSize * 0.75f;   // pad so turning shows less pop-in at the view edges
+                    planes[i] = pl;
+                }
+            }
 
             var want = new HashSet<long>();
             for (int dz = -r; dz <= r; dz++)
@@ -188,20 +233,38 @@ namespace IslandSystem
                 {
                     int cx = cvx + dx, cz = cvz + dz;
                     float wcx = origin.x + (cx + 0.5f) * chunkSize, wcz = origin.z + (cz + 0.5f) * chunkSize;
-                    if ((wcx - viewerPos.x) * (wcx - viewerPos.x) + (wcz - viewerPos.z) * (wcz - viewerPos.z) > keepR2) continue;
+                    float d2 = (wcx - viewerPos.x) * (wcx - viewerPos.x) + (wcz - viewerPos.z) * (wcz - viewerPos.z);
+                    if (d2 > keepR2) continue;
 
                     float u0 = cx * chunkSize / size.x, u1 = (cx + 1) * chunkSize / size.x;
                     float v0 = cz * chunkSize / size.z, v1 = (cz + 1) * chunkSize / size.z;
                     if (u1 <= 0f || u0 >= 1f || v1 <= 0f || v0 >= 1f) continue;
 
                     long key = Key(cx, cz);
-                    want.Add(key);
+                    want.Add(key);                        // kept by DISTANCE, independent of look direction
                     if (_chunks.ContainsKey(key)) continue;
                     if (_builtThisTick >= Mathf.Max(1, buildsPerTick)) continue;
+
+                    // Frustum gate on BUILDING: skip chunks the camera can't see. The immediate ring around
+                    // the viewer always builds (looking down / spawn / spinning in place).
+                    if (planes != null && d2 > innerR2)
+                    {
+                        var bb = new Bounds(
+                            new Vector3(wcx, origin.y + size.y * 0.5f, wcz),
+                            new Vector3(chunkSize, size.y + 6f, chunkSize));
+                        if (!GeometryUtility.TestPlanesAABB(planes, bb)) continue;
+                    }
 
                     int cseed = seed ^ (cx * 73856093) ^ (cz * 19349663);
                     var batches = GrassGenerator.BuildChunkInstances(terrain, Bands, waterline, cseed,
                         Mathf.Clamp01(u0), Mathf.Clamp01(u1), Mathf.Clamp01(v0), Mathf.Clamp01(v1));
+                    // Distance-fade band: each blade picks a random vanish distance inside it (dithered thinning,
+                    // no contour arcs) — fully gone just inside viewDistance so the chunk boundary never shows.
+                    for (int i = 0; i < batches.Count; i++)
+                    {
+                        batches[i].mpb.SetFloat(PropFadeStart, viewDistance * 0.55f);
+                        batches[i].mpb.SetFloat(PropFadeEnd, viewDistance * 0.92f);
+                    }
                     _chunks[key] = batches;           // may be empty; keep the key so we don't rebuild every tick
                     _builtThisTick++;
                 }

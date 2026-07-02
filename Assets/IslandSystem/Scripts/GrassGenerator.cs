@@ -46,17 +46,27 @@ namespace IslandSystem
         static readonly Dictionary<GrassSettings, Material> _mats = new Dictionary<GrassSettings, Material>();
         static readonly Dictionary<GameObject, Mesh> _meshes = new Dictionary<GameObject, Mesh>();
 
+        /// <summary>
+        /// Bumped by <see cref="ClearCache"/>. <see cref="IslandGrassField"/> compares it against the version its
+        /// chunks were built with and flushes STALE chunks — otherwise chunks built before a settings change keep
+        /// the old cached material and a hard seam appears along the chunk grid next to freshly built ones.
+        /// </summary>
+        public static int CacheVersion { get; private set; }
+
         /// <summary>Drop cached materials/meshes (call when layer params may have changed, e.g. on field enable).</summary>
-        public static void ClearCache() { _mats.Clear(); _meshes.Clear(); }
+        public static void ClearCache() { _mats.Clear(); _meshes.Clear(); CacheVersion++; }
 
         public static bool HasAnyGrass(List<IslandBand> bands)
         {
             if (bands == null) return false;
-            foreach (var b in bands)
-            {
-                if (b.biome == null || b.biome.grassLayers == null) continue;
-                foreach (var l in b.biome.grassLayers) if (l != null && l.IsValid) return true;
-            }
+            foreach (var b in bands) if (BiomeHasGrass(b.biome)) return true;
+            return false;
+        }
+
+        static bool BiomeHasGrass(BiomeAssetManifest biome)
+        {
+            if (biome == null || biome.grassLayers == null) return false;
+            foreach (var l in biome.grassLayers) if (l != null && l.IsValid) return true;
             return false;
         }
 
@@ -76,6 +86,17 @@ namespace IslandSystem
                 var biome = band.biome;
                 if (biome == null || biome.grassLayers == null) continue;
 
+                // Cross-biome blending only makes sense into a neighbour that ALSO grows grass. If the band
+                // next door is grassless (beach sand, bare mountains), this band's grass must NOT spill over —
+                // it thins out INSIDE its own edge instead.
+                bool blendLo = false, blendHi = false;
+                foreach (var other in bands)
+                {
+                    if (other.lo == band.lo && other.hi == band.hi) continue; // itself
+                    if (Mathf.Abs(other.hi - band.lo) < 0.005f) blendLo |= BiomeHasGrass(other.biome);
+                    if (Mathf.Abs(other.lo - band.hi) < 0.005f) blendHi |= BiomeHasGrass(other.biome);
+                }
+
                 int layerIdx = 0;
                 foreach (var gs in biome.grassLayers)
                 {
@@ -85,7 +106,7 @@ namespace IslandSystem
                     if (mesh == null) continue;
 
                     int lseed = seed ^ (bandIdx * 92821) ^ (layerIdx * 40503);
-                    var mats = Scatter(data, size, origin, band, gs, waterline, lseed, uMin, uMax, vMin, vMax);
+                    var mats = Scatter(data, size, origin, band, gs, waterline, lseed, uMin, uMax, vMin, vMax, blendLo, blendHi);
                     if (mats.Count == 0) continue;
 
                     // StructuredBuffer<float4x4> of world matrices, indexed in the shader by SV_InstanceID.
@@ -136,8 +157,35 @@ namespace IslandSystem
             return batches;
         }
 
+        /// <summary>Half-width of the biome grass blend zone (normalized height). Inside it a layer's grass
+        /// DITHERS out while the neighbouring band's grass dithers in — smooth biome-to-biome handoff.</summary>
+        const float EdgeBlend = 0.02f;
+        /// <summary>Wobble amplitude of the band boundary (normalized height), so the transition wanders
+        /// organically instead of following a clean height isoline.</summary>
+        const float EdgeNoise = 0.012f;
+
+        // Deterministic 2D value noise (world-space) — identical on every networked peer, and identical for the
+        // two bands sharing an edge, so their dither probabilities stay complementary (combined density ~constant).
+        static float Hash2 (int x, int z)
+        {
+            unchecked
+            {
+                int h = x * 374761393 + z * 668265263;
+                h = (h ^ (h >> 13)) * 1274126177;
+                return ((h ^ (h >> 16)) & 0x7FFFFFFF) / (float)int.MaxValue;
+            }
+        }
+        static float ValueNoise (float x, float z)
+        {
+            int x0 = Mathf.FloorToInt(x), z0 = Mathf.FloorToInt(z);
+            float fx = x - x0, fz = z - z0;
+            fx = fx * fx * (3f - 2f * fx); fz = fz * fz * (3f - 2f * fz);
+            float a = Hash2(x0, z0), b = Hash2(x0 + 1, z0), c = Hash2(x0, z0 + 1), d = Hash2(x0 + 1, z0 + 1);
+            return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(c, d, fx), fz);
+        }
+
         static List<Matrix4x4> Scatter(TerrainData data, Vector3 size, Vector3 origin, IslandBand band, GrassSettings gs,
-            float waterline, int seed, float uMin, float uMax, float vMin, float vMax)
+            float waterline, int seed, float uMin, float uMax, float vMin, float vMax, bool blendLo, bool blendHi)
         {
             var rng = new System.Random(seed);
             float spacing = 10f / Mathf.Sqrt(Mathf.Max(0.01f, gs.density));
@@ -152,7 +200,37 @@ namespace IslandSystem
                     float u = Mathf.Clamp01(Mathf.Lerp(uMin, uMax, (ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * 0.85f) / gx));
                     float v = Mathf.Clamp01(Mathf.Lerp(vMin, vMax, (iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * 0.85f) / gz));
                     float h01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, size.y);
-                    if (h01 <= waterline || h01 < band.lo || h01 > band.hi) continue;
+                    if (h01 <= waterline) continue;   // hard waterline — no grass under the sea
+
+                    // SOFT band edges: wobble the boundary with world noise, then dither this layer's grass out
+                    // across the blend zone. Against a GRASSY neighbour the zone straddles the boundary (the
+                    // neighbour mirrors it with the SAME noise → the two biomes' grass interleaves). Against a
+                    // GRASSLESS neighbour (sand, rock) the grass never crosses the line — it thins out inside.
+                    float wobble = (ValueNoise((origin.x + u * size.x) * 0.045f, (origin.z + v * size.z) * 0.045f) * 2f - 1f) * EdgeNoise;
+                    float hb = h01 + wobble;
+
+                    float wLo;
+                    if (band.lo <= 0.001f) wLo = 1f;
+                    else if (blendLo) wLo = Mathf.Clamp01((hb - (band.lo - EdgeBlend)) / (2f * EdgeBlend));
+                    else
+                    {
+                        if (h01 < band.lo) continue;                                     // hard edge: stay off the sand
+                        wLo = Mathf.Clamp01((hb - band.lo) / (2f * EdgeBlend));          // thin toward it, inside own band
+                    }
+
+                    float wHi;
+                    if (band.hi >= 0.999f) wHi = 1f;
+                    else if (blendHi) wHi = Mathf.Clamp01(((band.hi + EdgeBlend) - hb) / (2f * EdgeBlend));
+                    else
+                    {
+                        if (h01 > band.hi) continue;
+                        wHi = Mathf.Clamp01((band.hi - hb) / (2f * EdgeBlend));
+                    }
+
+                    float bandW = Mathf.Min(wLo, wHi);
+                    if (bandW <= 0f) continue;
+                    if (bandW < 1f && (float)rng.NextDouble() > bandW) continue;
+
                     float slope = data.GetSteepness(u, v);
                     if ((float)rng.NextDouble() > IslandTerrainGenerator.ConditionWeight(gs.where, h01, slope)) continue;
 
@@ -186,6 +264,10 @@ namespace IslandSystem
             m.SetColor("_BottomColor", gs.bottomColor);   // white/white = plain texture colour
             m.SetColor("_TopColor", gs.topColor);
             m.SetFloat("_Tiles", Mathf.Max(1, gs.textureTiles));
+            m.SetColor("_DryBottomColor", gs.dryBottomColor);
+            m.SetColor("_DryTopColor", gs.dryTopColor);
+            m.SetFloat("_ColorVariation", gs.colorVariation);
+            m.SetFloat("_VariationScale", gs.variationScale);
             // Object-space blade height (the shader bends by positionOS.y / _WindHeight, so NO instance scale here).
             m.SetFloat("_WindHeight", Mathf.Max(0.05f, mesh.bounds.size.y));
             m.SetFloat("_WindStrength", gs.windStrength);

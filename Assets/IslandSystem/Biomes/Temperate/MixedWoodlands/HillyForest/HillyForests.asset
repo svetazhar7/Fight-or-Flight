@@ -16,8 +16,8 @@ MonoBehaviour:
   climateZone: 2
   islandType: 24
   displayName: "\u0425\u043E\u043B\u043C\u0438\u0441\u0442\u044B\u0435 \u043B\u0435\u0441\u0430"
-  elevationOrder: 0.5
-  reliefStrength: 0.2
+  elevationOrder: 0.3
+  reliefStrength: 0.1
   debugColor: {r: 0.3, g: 0.5, b: 0.32, a: 1}
   noiseSettings:
     frequency: 3
@@ -53,7 +53,17 @@ MonoBehaviour:
   heightmapResolution: 513
   terrainSize: {x: 500, y: 150, z: 500}
   texturePatchScale: 6
-  textureLayers: []
+  textureLayers:
+  - label: 
+    terrainLayer: {fileID: 8574412962073106934, guid: b0f6fda18719afc45a2e174bc3f38b67, type: 2}
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 0
+      heightBlend: 0
+      slopeBlend: 0
+    weight: 0
   spawnRules: []
   treeRules: []
   rockRules: []
@@ -75,4 +85,29 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
-  grassLayers: []
+  grassLayers:
+  - enabled: 1
+    name: forest grass
+    density: 750
+    prefab: {fileID: 8061160331623397703, guid: 5b84436f59c413b4fbd36f180a8517bb, type: 3}
+    prefabScaleRange: {x: 0.55, y: 1}
+    layFlat: 0
+    alphaCutoff: 0.5
+    bottomColor: {r: 0.5647059, g: 0.8352942, b: 0.29803923, a: 1}
+    topColor: {r: 0.60784316, g: 0.90196085, b: 0.3254902, a: 1}
+    textureTiles: 2
+    colorVariation: 0.7
+    dryBottomColor: {r: 0.3629011, g: 0.4, b: 0.14117649, a: 1}
+    dryTopColor: {r: 0.789237, g: 0.85882354, b: 0.38039213, a: 1}
+    variationScale: 0.7
+    windStrength: 0.13
+    windSpeed: 1.1
+    windScale: 0.15
+    bendStrength: 1
+    where:
+      minHeight: 0
+      maxHeight: 0.8
+      minSlope: 0
+      maxSlope: 35
+      heightBlend: 0.08
+      slopeBlend: 10

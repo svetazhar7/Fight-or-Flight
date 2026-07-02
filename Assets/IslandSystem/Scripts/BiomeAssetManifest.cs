@@ -217,6 +217,17 @@ namespace IslandSystem
         [Tooltip("The texture is an NxN atlas of blade variants; each instance picks a random tile. 1 = whole texture.")]
         [Min(1)] public int textureTiles = 1;
 
+        [Header("Colour variation (world-noise patches: yellowed ↔ lush)")]
+        [Tooltip("How strongly patches drift toward the DRY colours (0 = uniform colour everywhere).")]
+        [Range(0f, 1f)] public float colorVariation = 0f;
+        [Tooltip("Root tint inside the dry/yellowed patches.")]
+        public Color dryBottomColor = Color.white;
+        [Tooltip("Tip tint inside the dry/yellowed patches.")]
+        public Color dryTopColor = Color.white;
+        [Tooltip("Spatial frequency of the patches (1/metres): 0.03 ≈ ~30 m patches. Same noise field on every " +
+                 "layer/biome, so the patches blend continuously across biome borders.")]
+        public float variationScale = 0.03f;
+
         [Header("Wind")]
         [Range(0f, 1f)] public float windStrength = 0.12f;
         public float windSpeed = 1f;

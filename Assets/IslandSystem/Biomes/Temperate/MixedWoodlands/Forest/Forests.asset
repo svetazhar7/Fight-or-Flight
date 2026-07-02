@@ -88,7 +88,7 @@ MonoBehaviour:
   grassLayers:
   - enabled: 1
     name: forest grass
-    density: 650
+    density: 750
     prefab: {fileID: 8061160331623397703, guid: 5b84436f59c413b4fbd36f180a8517bb, type: 3}
     prefabScaleRange: {x: 0.55, y: 1}
     layFlat: 0
@@ -96,6 +96,10 @@ MonoBehaviour:
     bottomColor: {r: 0.5647059, g: 0.8352942, b: 0.29803923, a: 1}
     topColor: {r: 0.60784316, g: 0.90196085, b: 0.3254902, a: 1}
     textureTiles: 2
+    colorVariation: 0.5
+    dryBottomColor: {r: 0.23825316, g: 0.4, b: 0.14117649, a: 1}
+    dryTopColor: {r: 0.5304461, g: 0.85882354, b: 0.38039213, a: 1}
+    variationScale: 0.7
     windStrength: 0.13
     windSpeed: 1.1
     windScale: 0.15

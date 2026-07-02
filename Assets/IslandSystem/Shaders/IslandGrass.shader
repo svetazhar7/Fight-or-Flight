@@ -13,6 +13,12 @@ Shader "IslandSystem/Grass"
         _BottomColor ("Bottom Color (root tint)", Color) = (1,1,1,1)
         _TopColor    ("Top Color (tip tint)",     Color) = (1,1,1,1)
         _Tiles       ("Texture Tiles (NxN atlas, 1 = off)", Float) = 1
+        _DryBottomColor ("Dry Bottom Color", Color) = (1,1,1,1)
+        _DryTopColor    ("Dry Top Color",    Color) = (1,1,1,1)
+        _ColorVariation ("Color Variation (0 = off)", Range(0,1)) = 0
+        _VariationScale ("Variation Patch Scale (1/m)", Float) = 0.03
+        _FadeStart ("Distance Fade Start (m)", Float) = 100000
+        _FadeEnd   ("Distance Fade End (m)",   Float) = 100001
         _WindHeight   ("Wind Height (blade height)", Float) = 0.5
         _WindStrength ("Wind Strength", Float) = 0.15
         _WindSpeed    ("Wind Speed",    Float) = 1.0
@@ -53,9 +59,36 @@ Shader "IslandSystem/Grass"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float4 _BottomColor, _TopColor;
-                float  _Cutoff, _Tiles;
+                float4 _DryBottomColor, _DryTopColor;
+                float  _Cutoff, _Tiles, _ColorVariation, _VariationScale;
+                float  _FadeStart, _FadeEnd;
                 float  _WindHeight, _WindStrength, _WindSpeed, _WindScale, _BendStrength, _AmbientBoost;
             CBUFFER_END
+
+            // Cheap 2D value noise for the large-scale colour variation. WORLD-space input → patches are
+            // continuous across chunks, layers and biome borders (every material samples the same field).
+            float hash21 (float2 p) { p = frac(p * float2(123.34, 456.21)); p += dot(p, p + 45.32); return frac(p.x * p.y); }
+            float vnoise (float2 p)
+            {
+                float2 ip = floor(p), fp = frac(p);
+                fp = fp * fp * fp * (fp * (fp * 6.0 - 15.0) + 10.0);   // quintic fade — hides cell borders
+                float a = hash21(ip), b = hash21(ip + float2(1, 0)), c = hash21(ip + float2(0, 1)), d = hash21(ip + float2(1, 1));
+                return lerp(lerp(a, b, fp.x), lerp(c, d, fp.x), fp.y);
+            }
+
+            // Organic patch noise. Raw bilinear value noise makes SQUARE, axis-aligned blobs (the lattice shows
+            // through). Domain warping + rotated octaves break the grid so the dry/lush patches look natural.
+            float patchNoise (float2 p)
+            {
+                float2 w = float2(vnoise(p * 0.9 + 13.7), vnoise(p * 0.9 + 71.3));
+                p += (w - 0.5) * 2.2;                                   // domain warp: bends the lattice
+                const float2x2 R1 = float2x2( 0.5403, -0.8415, 0.8415,  0.5403);  // rot 1 rad
+                const float2x2 R2 = float2x2(-0.4161, -0.9093, 0.9093, -0.4161);  // rot 2 rad
+                float n  = 0.55 * vnoise(mul(R1, p));
+                n       += 0.30 * vnoise(mul(R2, p) * 2.13 + 7.7);
+                n       += 0.15 * vnoise(p * 4.37 + 19.1);
+                return n;
+            }
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; uint instanceID : SV_InstanceID; };
             struct Varyings   { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; };
@@ -65,11 +98,25 @@ Shader "IslandSystem/Grass"
                 Varyings o;
                 uint visId = _VisibleIDs[IN.instanceID];               // indirect draw: instanceID walks the VISIBLE list
                 float4x4 m = _PerInstanceData[visId];                  // this instance's world matrix
-                float3 posWS = mul(m, float4(IN.positionOS.xyz, 1.0)).xyz;
+
+                // Distance fade, DITHERED per instance: each blade shrinks into the ground at its own random
+                // distance inside the [_FadeStart.._FadeEnd] band, so the field gradually THINS OUT with
+                // distance. A uniform fade (all blades shrinking at the same radius) painted visible contour
+                // arcs around the camera — the canopy brightened toward the terrain colour along rings.
+                float2 rootXZ = float2(m._m03, m._m23);
+                float dCam = distance(rootXZ, _WorldSpaceCameraPos.xz);
+                uint fh = visId * 2654435761u + 1013904223u;
+                fh = (fh ^ (fh >> 16)) * 2246822519u;
+                float thr01 = ((fh >> 8) & 0xFFFFFF) / 16777215.0;
+                float thr = lerp(_FadeStart, _FadeEnd, thr01);      // this blade's personal vanish distance
+                float fade = saturate((dCam - thr) / 6.0);          // ...over which it shrinks within ~6 m
+                float3 posOS = IN.positionOS.xyz * (1.0 - fade);
+
+                float3 posWS = mul(m, float4(posOS, 1.0)).xyz;
                 float3 nWS   = normalize(mul(m, float4(IN.normalOS, 0.0)).xyz);
 
                 // Bend from OBJECT-space height (root = 0, tip = 1) — root is pinned, only the tips sway.
-                float bend = saturate(IN.positionOS.y / max(0.01, _WindHeight));
+                float bend = saturate(posOS.y / max(0.01, _WindHeight));
 
                 float2 wp = posWS.xz * _WindScale; float ph = _Time.y * _WindSpeed;
                 float w = sin(ph + wp.x + wp.y) + 0.5 * sin(ph * 1.7 + wp.x * 0.7 - wp.y * 1.3);
@@ -117,12 +164,28 @@ Shader "IslandSystem/Grass"
                 Light L = GetMainLight(sc);
                 // Soft half-lambert (0.35..1) so shaded sides stay lit but the lit side doesn't over-brighten.
                 float ndl = saturate(dot(n, L.direction)) * 0.5 + 0.5;
-                float3 diffuse = L.color.rgb * lerp(0.35, 1.0, ndl) * L.shadowAttenuation;
+                float3 sun = L.color.rgb * lerp(0.35, 1.0, ndl);
                 float3 ambient = SampleSH(n) + _AmbientBoost.xxx;
-                // Cyanilux-style root→tip gradient (white/white = plain texture colour, e.g. for moss).
-                float3 tint = lerp(_BottomColor.rgb, _TopColor.rgb, saturate(i.grad));
-                // Clamp the combined light so pale textures don't blow out to white in bright scenes.
-                float3 col = tex.rgb * tint * min(diffuse + ambient, 1.25);
+                // Clamp the combined light so pale textures don't blow out to white in bright scenes,
+                // THEN apply shadows to the WHOLE sum (not just the sun term): the ambient/SH floor was
+                // keeping shadowed grass almost fully bright, so cloud/hill shadows didn't read on it.
+                float3 lighting = min(sun + ambient, 1.25);
+                lighting *= lerp(0.35, 1.0, L.shadowAttenuation);   // match how dark the shadowed terrain gets
+
+                // Cyanilux-style root→tip gradient (white/white = plain texture colour, e.g. for moss),
+                // with large-scale WORLD-noise variation: patches drift toward the DRY colours (yellowed)
+                // and back to the lush base — continuous across chunks and biome borders.
+                float3 bottom = _BottomColor.rgb, top = _TopColor.rgb;
+                if (_ColorVariation > 0.001)
+                {
+                    float nse = patchNoise(i.wpos.xz * _VariationScale);
+                    float dry = smoothstep(0.28, 0.72, nse) * _ColorVariation;
+                    bottom = lerp(bottom, _DryBottomColor.rgb, dry);
+                    top    = lerp(top,    _DryTopColor.rgb,    dry);
+                }
+                float3 tint = lerp(bottom, top, saturate(i.grad));
+
+                float3 col = tex.rgb * tint * lighting;
                 col = MixFog(col, i.fog);
                 return half4(col, 1.0);
             }
