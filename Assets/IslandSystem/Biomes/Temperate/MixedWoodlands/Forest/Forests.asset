@@ -108,6 +108,6 @@ MonoBehaviour:
       minHeight: 0
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 35
+      maxSlope: 60
       heightBlend: 0.08
-      slopeBlend: 10
+      slopeBlend: 8

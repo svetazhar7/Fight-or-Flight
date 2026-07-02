@@ -96,7 +96,7 @@ MonoBehaviour:
     bottomColor: {r: 0.5647059, g: 0.8352942, b: 0.29803923, a: 1}
     topColor: {r: 0.60784316, g: 0.90196085, b: 0.3254902, a: 1}
     textureTiles: 2
-    colorVariation: 0.7
+    colorVariation: 0.3
     dryBottomColor: {r: 0.3629011, g: 0.4, b: 0.14117649, a: 1}
     dryTopColor: {r: 0.789237, g: 0.85882354, b: 0.38039213, a: 1}
     variationScale: 0.7
@@ -108,6 +108,6 @@ MonoBehaviour:
       minHeight: 0
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 35
+      maxSlope: 60
       heightBlend: 0.08
-      slopeBlend: 10
+      slopeBlend: 8
