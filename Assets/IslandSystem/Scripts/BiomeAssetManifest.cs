@@ -125,8 +125,9 @@ namespace IslandSystem
                  "several tree prefabs here and weight their mix with prefabWeights.")]
         public GameObject[] prefabs = Array.Empty<GameObject>();
 
-        [Tooltip("Optional selection weights, parallel to prefabs (the species ratio). Empty/all-zero = equal. " +
-                 "E.g. prefabs [Pine, Birch] with weights [70, 30] => ~70% pine, 30% birch.")]
+        [Tooltip("Selection weight PER prefab above (same order): weights[i] belongs to prefabs[i]. Higher = more " +
+                 "common. Kept the same length as prefabs automatically (new entries default to 1). " +
+                 "E.g. prefabs [Pine, Birch] with weights [70, 30] => ~70% pine, 30% birch. All equal = even mix.")]
         public float[] prefabWeights = Array.Empty<float>();
 
         [Tooltip("How many instances to attempt to place on each island. Used by rocks/props.")]
@@ -135,6 +136,10 @@ namespace IslandSystem
         [Tooltip("TREES: density in instances per 100 m² of eligible ground. The spacing between trees is " +
                  "derived from this (≈ 10/sqrt(density) metres). Used instead of count for tree placement.")]
         [Min(0f)] public float density = 2f;
+
+        [Tooltip("TREES: how UNEVEN the spacing is. 0 = every tree the same distance apart (regular), " +
+                 "1 = spacing varies ±50% so trees form natural clumps and clearings instead of a grid.")]
+        [Range(0f, 1f)] public float spacingVariation = 0.5f;
 
         public PlacementCondition where = PlacementCondition.Range(0.1f, 1f, 0f, 30f);
 
@@ -327,6 +332,33 @@ namespace IslandSystem
         [Tooltip("Grass layers for this biome — add several (e.g. a flat moss base + upright grass + flowers). " +
                  "Each layer is a prefab or a texture card, streamed only near the camera.")]
         public List<GrassSettings> grassLayers = new List<GrassSettings>();
+
+#if UNITY_EDITOR
+        /// <summary>Keep every rule's <c>prefabWeights</c> aligned 1:1 with its <c>prefabs</c> so the inspector
+        /// always shows one editable weight per tree (new prefabs default to weight 1, no misaligned arrays).</summary>
+        void OnValidate()
+        {
+            SyncWeights(spawnRules);
+            SyncWeights(treeRules);
+            SyncWeights(rockRules);
+            SyncWeights(flowerRules);
+        }
+
+        static void SyncWeights<T>(List<T> rules) where T : ObjectSpawnRule
+        {
+            if (rules == null) return;
+            foreach (var r in rules)
+            {
+                if (r == null || r.prefabs == null) continue;
+                int n = r.prefabs.Length;
+                if (r.prefabWeights == null) r.prefabWeights = new float[0];
+                if (r.prefabWeights.Length == n) continue;
+                var resized = new float[n];
+                for (int i = 0; i < n; i++) resized[i] = i < r.prefabWeights.Length ? r.prefabWeights[i] : 1f;
+                r.prefabWeights = resized;
+            }
+        }
+#endif
 
         /// <summary>The non-null TerrainLayers in author order — this is what the TerrainData uses.</summary>
         public TerrainLayer[] CollectTerrainLayers()

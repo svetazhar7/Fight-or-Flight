@@ -19,7 +19,10 @@ namespace IslandSystem
             public float hi;
         }
 
-        /// <summary>A flattened build zone: ground inside is levelled to <see cref="smoothedHeight"/>.</summary>
+        /// <summary>A flattened build zone: ground inside is levelled to <see cref="smoothedHeight"/>.
+        /// Serializable so <see cref="IslandMarker"/> can persist the zones for runtime-streamed systems
+        /// (e.g. flowers) that must keep out of villages long after generation.</summary>
+        [System.Serializable]
         public struct VillageZone
         {
             public BiomeAssetManifest biome;
@@ -737,9 +740,10 @@ namespace IslandSystem
             Transform holder = new GameObject("Trees").transform;
             holder.SetParent(terrain.transform, false);
 
-            // Footprint radius per prefab (for the no-overlap test) + the largest scale (for the grid cell size).
+            // Footprint radius per prefab (for the no-overlap test) + the largest scale, plus the widest
+            // spacing any rule asks for (density + its variation) — both feed the accel-grid cell size.
             var radiusCache = new Dictionary<GameObject, float>();
-            float maxScale = 0.0001f, maxR = 0.2f;
+            float maxScale = 0.0001f, maxR = 0.2f, maxSep = 1f;
             foreach (var band in bands)
             {
                 if (band.biome == null || band.biome.treeRules == null) continue;
@@ -747,6 +751,9 @@ namespace IslandSystem
                 {
                     if (rule == null || rule.prefabs == null) continue;
                     maxScale = Mathf.Max(maxScale, rule.scaleRange.x, rule.scaleRange.y);
+                    float rd = rule.density > 0f ? rule.density : 2f;
+                    float sp = 10f / Mathf.Sqrt(rd);
+                    maxSep = Mathf.Max(maxSep, sp * (1f + 0.5f * Mathf.Clamp01(rule.spacingVariation)));
                     foreach (var p in rule.prefabs)
                         if (p != null && !radiusCache.ContainsKey(p))
                         {
@@ -758,9 +765,10 @@ namespace IslandSystem
             if (radiusCache.Count == 0) return;
 
             // Global no-overlap acceleration grid: a tree is rejected if it lands within (rA+rB)*pack of an
-            // already-placed tree, ACROSS all rules/species — so nothing spawns inside another tree.
-            float cell = Mathf.Max(1f, maxR * maxScale * 2f);
-            const float pack = 0.8f;
+            // already-placed tree, ACROSS all rules/species — so nothing spawns inside another tree. The cell
+            // must span the largest possible interaction (footprint OR density spacing) for the 3×3 search.
+            float cell = Mathf.Max(1f, Mathf.Max(maxR * maxScale, maxSep * 0.5f) * 2f);
+            const float pack = 0.9f;
             var occ = new Dictionary<long, List<Vector3>>();    // cell -> list of (worldX, worldZ, radius)
             long Key(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
             bool TooClose(float wx, float wz, float r)
@@ -795,154 +803,64 @@ namespace IslandSystem
                     ruleIndex++;
                     if (rule == null || rule.prefabs == null || rule.prefabs.Length == 0) continue;
 
-                    // DENSITY-based placement: trees per 100 m² -> a spacing of ≈10/sqrt(density) metres. A jittered
-                    // grid at that spacing gives roughly that density; each candidate is gated to the biome band,
-                    // off villages/fade, by the rule's condition, AND by the global no-overlap check.
+                    // DENSITY-based placement via POISSON-DISC dart throwing: trees per 100 m² -> a target
+                    // spacing of ≈10/sqrt(density) m. Instead of a jittered grid (which still reads as rows),
+                    // we throw random darts and accept one only if it clears every neighbour by a PER-TREE
+                    // random distance — so gaps vary and trees form natural clumps/clearings, never a grid.
                     float density = rule.density > 0f ? rule.density : 2f;
                     float spacing = 10f / Mathf.Sqrt(density);
-                    int gx = Mathf.Max(1, Mathf.CeilToInt(data.size.x / spacing));
-                    int gz = Mathf.Max(1, Mathf.CeilToInt(data.size.z / spacing));
+                    float variation = Mathf.Clamp01(rule.spacingVariation);
+                    // Enough darts to fill the area to capacity (rejection handles the rest).
+                    int target = Mathf.CeilToInt(data.size.x * data.size.z / (spacing * spacing));
+                    int attempts = Mathf.Clamp(target * 5, 64, 4_000_000);
                     var rng = new System.Random((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663);
-                    const float jitter = 0.8f;
 
-                    for (int iz = 0; iz < gz; iz++)
+                    for (int a = 0; a < attempts; a++)
                     {
-                        for (int ix = 0; ix < gx; ix++)
-                        {
-                            float u = Mathf.Clamp01((ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gx);
-                            float v = Mathf.Clamp01((iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gz);
-                            if (InAnyVillage(u, v, data.size, villages)) continue;
-                            float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                            if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
-                            float slopeDeg = data.GetSteepness(u, v);
-                            // Soft edge: thin out toward the condition's limits instead of a hard cut.
-                            if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
+                        float u = (float)rng.NextDouble();
+                        float v = (float)rng.NextDouble();
+                        if (InAnyVillage(u, v, data.size, villages)) continue;
+                        float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
+                        if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
+                        float slopeDeg = data.GetSteepness(u, v);
+                        // Soft edge: thin out toward the condition's limits instead of a hard cut.
+                        if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
 
-                            // Pick the species by weight (the mix ratio), then its random size + footprint.
-                            int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
-                            var prefab = rule.prefabs[idx];
-                            if (prefab == null || !radiusCache.TryGetValue(prefab, out float pr)) continue;
-                            float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                            if (s <= 0f) s = 1f;
+                        // This dart's OWN spacing (varies ±50%·variation) → uneven gaps. The open-slot test is
+                        // SPECIES-INDEPENDENT, so which tree we place doesn't bias where trees land (previously
+                        // big-footprint species were rejected more, making the small ones look "prioritized").
+                        float wx = u * data.size.x, wz = v * data.size.z;
+                        float sep = spacing * Mathf.Lerp(1f - 0.5f * variation, 1f + 0.5f * variation, (float)rng.NextDouble());
+                        if (TooClose(wx, wz, sep * 0.5f)) continue;
 
-                            float wx = u * data.size.x, wz = v * data.size.z;
-                            if (TooClose(wx, wz, pr * s)) continue;  // would spawn inside another tree
-                            Register(wx, wz, pr * s);
+                        // Slot is open — NOW pick the species by weight (mix honoured exactly) + its size.
+                        int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
+                        var prefab = rule.prefabs[idx];
+                        if (prefab == null || !radiusCache.TryGetValue(prefab, out float pr)) continue;
+                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                        if (s <= 0f) s = 1f;
 
-                            // Instantiate the tree GameObject and apply position (sunk), rotation and scale.
-                            // Plain Instantiate (not PrefabUtility) — far faster for thousands of procedural trees.
-                            Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(u, v) - rule.sink, wz);
-                            GameObject go = Object.Instantiate(prefab, holder);
-                            go.transform.position = worldPos;
+                        // Claim max(spacing, footprint) so neighbours keep the gap AND never physically overlap.
+                        Register(wx, wz, Mathf.Max(sep * 0.5f, pr * s));
 
-                            Quaternion rot = rule.alignToNormal
-                                ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v))
-                                : Quaternion.identity;
-                            if (rule.randomYRotation)
-                                rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                            go.transform.rotation = rot;
-                            go.transform.localScale = go.transform.localScale * s;
-                        }
+                        // Instantiate the tree GameObject and apply position (sunk), rotation and scale.
+                        // Plain Instantiate (not PrefabUtility) — far faster for thousands of procedural trees.
+                        Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(u, v) - rule.sink, wz);
+                        GameObject go = Object.Instantiate(prefab, holder);
+                        go.transform.position = worldPos;
+
+                        Quaternion rot = rule.alignToNormal
+                            ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v))
+                            : Quaternion.identity;
+                        if (rule.randomYRotation)
+                            rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                        go.transform.rotation = rot;
+                        go.transform.localScale = go.transform.localScale * s;
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Scatters the biomes' FLOWER rules as GameObjects under a "Flowers" holder. Placement works like
-        /// trees (density grid + band + condition, off villages), but every accepted point becomes a CLUSTER:
-        /// clusterSize.x..y flowers strewn within clusterRadius — flowers grow in natural patches. Flowers of
-        /// a cluster that fall off the band / into water / into a village are trimmed individually.
-        /// </summary>
-        public static void ScatterFlowers(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
-        {
-            if (bands == null) return;
-            var data = terrain.terrainData;
-            Vector3 origin = terrain.transform.position;
-
-            var existing = terrain.transform.Find("Flowers");
-            if (existing != null)
-            {
-                if (Application.isPlaying) Object.Destroy(existing.gameObject);
-                else Object.DestroyImmediate(existing.gameObject);
-            }
-            bool any = false;
-            foreach (var band in bands)
-                if (band.biome != null && band.biome.flowerRules != null && band.biome.flowerRules.Count > 0) { any = true; break; }
-            if (!any) return;
-
-            Transform holder = new GameObject("Flowers").transform;
-            holder.SetParent(terrain.transform, false);
-
-            int bi = 0;
-            foreach (var band in bands)
-            {
-                bi++;
-                if (band.biome == null || band.biome.flowerRules == null) continue;
-                int ruleIndex = 0;
-                foreach (var rule in band.biome.flowerRules)
-                {
-                    ruleIndex++;
-                    if (rule == null || rule.prefabs == null || rule.prefabs.Length == 0) continue;
-
-                    // density = CLUSTERS per 100 m² -> jittered grid of cluster centres (same scheme as trees).
-                    float density = rule.density > 0f ? rule.density : 1f;
-                    float spacing = 10f / Mathf.Sqrt(density);
-                    int gx = Mathf.Max(1, Mathf.CeilToInt(data.size.x / spacing));
-                    int gz = Mathf.Max(1, Mathf.CeilToInt(data.size.z / spacing));
-                    var rng = new System.Random((seed + bi * 131) * 48271 ^ ruleIndex * 28657);
-                    const float jitter = 0.8f;
-
-                    for (int iz = 0; iz < gz; iz++)
-                    {
-                        for (int ix = 0; ix < gx; ix++)
-                        {
-                            float u = Mathf.Clamp01((ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gx);
-                            float v = Mathf.Clamp01((iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gz);
-                            if (InAnyVillage(u, v, data.size, villages)) continue;
-                            float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                            if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
-                            float slopeDeg = data.GetSteepness(u, v);
-                            if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
-
-                            // One CLUSTER at this point: the first flower sits at the centre, the rest scatter
-                            // uniformly inside the cluster disc.
-                            int count = rng.Next(rule.clusterSize.x, rule.clusterSize.y + 1);
-                            float cx = u * data.size.x, cz = v * data.size.z;
-                            for (int i = 0; i < count; i++)
-                            {
-                                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-                                float rad = i == 0 ? 0f : rule.clusterRadius * Mathf.Sqrt((float)rng.NextDouble());
-                                float wx = cx + Mathf.Cos(ang) * rad;
-                                float wz = cz + Mathf.Sin(ang) * rad;
-                                float fu = Mathf.Clamp01(wx / data.size.x), fv = Mathf.Clamp01(wz / data.size.z);
-                                float fh01 = data.GetInterpolatedHeight(fu, fv) / Mathf.Max(0.0001f, data.size.y);
-                                if (fh01 < FadeThreshold || fh01 < band.lo || fh01 > band.hi) continue;
-                                if (InAnyVillage(fu, fv, data.size, villages)) continue;
-
-                                int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
-                                var prefab = rule.prefabs[idx];
-                                if (prefab == null) continue;
-                                float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                                if (s <= 0f) s = 1f;
-
-                                Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(fu, fv) - rule.sink, wz);
-                                GameObject go = Object.Instantiate(prefab, holder);
-                                go.transform.position = worldPos;
-
-                                Quaternion rot = rule.alignToNormal
-                                    ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(fu, fv))
-                                    : Quaternion.identity;
-                                if (rule.randomYRotation)
-                                    rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                                go.transform.rotation = rot;
-                                go.transform.localScale = go.transform.localScale * s;
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         /// <summary>Approx horizontal footprint radius (world units) of a prefab from its mesh bounds × scale.</summary>
         static float PrototypeRadius(GameObject prefab)
@@ -960,7 +878,7 @@ namespace IslandSystem
         }
 
         /// <summary>Weighted random index into a pool of <paramref name="count"/> items (the species mix ratio).</summary>
-        static int PickWeighted(float[] weights, int count, System.Random rng)
+        public static int PickWeighted(float[] weights, int count, System.Random rng)
         {
             if (count <= 1) return 0;
             if (weights == null || weights.Length == 0) return rng.Next(count);
@@ -1060,7 +978,7 @@ namespace IslandSystem
         // ---- Villages -----------------------------------------------------
 
         /// <summary>True if normalized point (u,v) lies inside any flattened village zone.</summary>
-        static bool InAnyVillage(float u, float v, Vector3 size, List<VillageZone> villages)
+        public static bool InAnyVillage(float u, float v, Vector3 size, List<VillageZone> villages)
         {
             if (villages == null) return false;
             float lx = u * size.x, lz = v * size.z;

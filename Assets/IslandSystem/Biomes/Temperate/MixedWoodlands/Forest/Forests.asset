@@ -68,10 +68,14 @@ MonoBehaviour:
   treeRules:
   - label: 
     prefabs:
-    - {fileID: 919132149155446097, guid: 63dd3aff89eba5d488645ce6b3a59ced, type: 3}
-    prefabWeights: []
+    - {fileID: 919132149155446097, guid: 5325a0d426243bc4db15179e5032edf0, type: 3}
+    - {fileID: 919132149155446097, guid: cb06961d2b004174ea6dd91ab430ddf5, type: 3}
+    prefabWeights:
+    - 70
+    - 30
     count: 10
     density: 20
+    spacingVariation: 0.6
     where:
       minHeight: 0
       maxHeight: 0
@@ -89,9 +93,33 @@ MonoBehaviour:
   - label: pink flowers
     prefabs:
     - {fileID: 919132149155446097, guid: b2490b8c2ee050b4a8d6323eee80a63d, type: 3}
-    prefabWeights: []
+    prefabWeights:
+    - 1
+    count: 10
+    density: 0.5
+    spacingVariation: 0.5
+    where:
+      minHeight: 0.05
+      maxHeight: 0.8
+      minSlope: 0
+      maxSlope: 25
+      heightBlend: 0.08
+      slopeBlend: 10
+    scaleRange: {x: 0.8, y: 0.8}
+    randomYRotation: 1
+    alignToNormal: 0
+    sink: 0.02
+    nonUniformScale: 0
+    clusterSize: {x: 5, y: 7}
+    clusterRadius: 2.5
+  - label: yellow
+    prefabs:
+    - {fileID: 919132149155446097, guid: 6642d045fece0b44ca0fb3a24b16db5c, type: 3}
+    prefabWeights:
+    - 1
     count: 10
     density: 0.3
+    spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
@@ -109,9 +137,11 @@ MonoBehaviour:
   - label: chamomile
     prefabs:
     - {fileID: 919132149155446097, guid: 85cbb5678d115c04e8b0c0581f8d8c62, type: 3}
-    prefabWeights: []
+    prefabWeights:
+    - 1
     count: 20
-    density: 0.8
+    density: 10
+    spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
@@ -124,14 +154,16 @@ MonoBehaviour:
     alignToNormal: 0
     sink: 0.02
     nonUniformScale: 0
-    clusterSize: {x: 4, y: 6}
-    clusterRadius: 2.5
+    clusterSize: {x: 8, y: 12}
+    clusterRadius: 5
   - label: fern
     prefabs:
     - {fileID: 919132149155446097, guid: 38131452f7b427744ad6054a7344a265, type: 3}
-    prefabWeights: []
+    prefabWeights:
+    - 1
     count: 20
     density: 0.8
+    spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
@@ -150,9 +182,12 @@ MonoBehaviour:
     prefabs:
     - {fileID: 919132149155446097, guid: 428a731d9ae66544ab09ab6719f5f209, type: 3}
     - {fileID: 919132149155446097, guid: 877a877d13a96144b99ed12c3cf4088a, type: 3}
-    prefabWeights: []
+    prefabWeights:
+    - 50
+    - 50
     count: 10
     density: 0.8
+    spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8

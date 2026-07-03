@@ -221,9 +221,8 @@ namespace IslandSystem
             if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
             IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, villages);
-            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // Unity Terrain tree instances (off villages)
+            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // trees: ALWAYS loaded (off villages)
             IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, villages); // rock GameObjects (off villages)
-            IslandTerrainGenerator.ScatterFlowers(terrain, def, seed, bands, villages); // flower CLUSTERS (off villages)
             IslandTerrainGenerator.PlaceVillageBuildings(terrain, villages, seed);    // buildings on the flattened ground
 
             var marker = go.AddComponent<IslandMarker>();
@@ -232,6 +231,7 @@ namespace IslandSystem
             marker.islandType = def.islandType;
             marker.level = level;
             foreach (var b in bands) marker.bands.Add(new IslandBand { biome = b.biome, lo = b.lo, hi = b.hi });
+            marker.villages.AddRange(villages);   // streamed systems (flowers) keep out of villages at runtime
 
             // Procedural grass: attach a streamer that builds grass in CHUNKS around the camera (only if any
             // biome has grass layers). Nothing is built until the camera is near — cheap on huge islands.
@@ -241,6 +241,15 @@ namespace IslandSystem
                 field.terrain = terrain;
                 field.seed = seed;
                 field.waterline = waterline;
+            }
+
+            // Flowers stream like the grass: chunked around the viewer, built only where the camera looks
+            // (frustum-gated). Nothing is spawned at generation time.
+            if (IslandFlowerField.HasAnyFlowers(marker.bands))
+            {
+                var flowers = go.AddComponent<IslandFlowerField>();
+                flowers.terrain = terrain;
+                flowers.seed = seed;
             }
         }
 

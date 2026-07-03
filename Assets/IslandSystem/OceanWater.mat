@@ -81,8 +81,8 @@ Material:
     - _FresnelStrength: 0.5
     - _MaxDepth: 8
     - _MeshNoise: 1
-    - _PoseidonSineTime: 0.87437963
-    - _PoseidonTime: 372.78537
+    - _PoseidonSineTime: 0.8628407
+    - _PoseidonTime: 2960.4211
     - _QueueControl: 0
     - _QueueOffset: 0
     - _ReflectionDistortionStrength: 20
