@@ -275,7 +275,4 @@ MonoBehaviour:
       m_PostInfinity: 2
       m_RotationOrder: 4
     customChanceEffector: {fileID: 0}
-  FX:
-  - {fileID: 11400000, guid: 6ca0abc02f6d0d24c9585aece19df8ab, type: 2}
-  FXVolume: 0.519
-  useVFX: 1
+  FX: []

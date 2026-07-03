@@ -21,6 +21,14 @@ namespace IslandSystem
         public Terrain terrain;
         [Tooltip("Explicit viewer to stream around (e.g. the player). Empty = Camera.main (play) / Scene camera (edit).")]
         public Transform viewer;
+
+        /// <summary>
+        /// The LOCAL player binding, set by PlayerEnvironment when the owned player spawns (networked prefabs
+        /// spawn at runtime, so fields can't reference them in the scene). All fields stream around this
+        /// transform and frustum-gate against this camera. Cleared on despawn.
+        /// </summary>
+        public static Transform LocalViewer;
+        public static Camera LocalViewerCamera;
         public int seed;
         [Tooltip("Normalized waterline — grass only grows above it.")]
         public float waterline = 0.03f;
@@ -106,6 +114,7 @@ namespace IslandSystem
         Vector3 ViewerPos()
         {
             if (viewer != null) return viewer.position;
+            if (Application.isPlaying && LocalViewer != null) return LocalViewer.position;
 #if UNITY_EDITOR
             if (!Application.isPlaying)
             {
@@ -127,6 +136,7 @@ namespace IslandSystem
                 if (sv != null && sv.camera != null) return sv.camera;
             }
 #endif
+            if (LocalViewerCamera != null) return LocalViewerCamera;
             return Camera.main;
         }
 

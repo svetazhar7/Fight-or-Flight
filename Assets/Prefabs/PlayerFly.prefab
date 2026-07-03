@@ -17,6 +17,8 @@ GameObject:
   - component: {fileID: 4464028082648251435}
   - component: {fileID: 5650953068858760610}
   - component: {fileID: 3594808514098429908}
+  - component: {fileID: 1535665242788909789}
+  - component: {fileID: 8683208680471099694}
   m_Layer: 0
   m_Name: PlayerFly
   m_TagString: Untagged
@@ -176,7 +178,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 7
+  <PrefabId>k__BackingField: 8
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 10978239100177824421
   SceneId: 0
@@ -205,7 +207,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584209403996043299
+  _initializedTimestamp: -8584185768692704155
 --- !u!114 &4464028082648251435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -221,8 +223,8 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 3389683863587891912}
   _networkObjectCache: {fileID: 3389683863587891912}
-  moveSpeed: 500
-  jumpHeight: 2
+  moveSpeed: 8
+  jumpHeight: 100
   gravity: -20
   mouseSensitivity: 35
   interactRange: 3
@@ -292,6 +294,35 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 3389683863587891912}
   _networkObjectCache: {fileID: 3389683863587891912}
   playerCamera: {fileID: 7351529055247218256}
+--- !u!114 &1535665242788909789
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4683878481531759504}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 557ec628aa5523a4e8b2f2d2205a8ff0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerEnvironment
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 3389683863587891912}
+  _networkObjectCache: {fileID: 0}
+  playerCamera: {fileID: 7351529055247218256}
+--- !u!114 &8683208680471099694
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4683878481531759504}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aaf7f3b20c92f4941a1f18484017c3be, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.GrassInteractor
+  radius: 2
 --- !u!1 &4731243332829719089
 GameObject:
   m_ObjectHideFlags: 0
