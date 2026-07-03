@@ -249,10 +249,9 @@ namespace IslandSystem
         public float variationScale = 0.03f;
 
         [Header("Wind")]
+        [Tooltip("Sway amplitude of this layer (0 for flat moss). The wind PHASE (speed/scale) is global — " +
+                 "see IslandWind — so grass, flowers and bushes all sway together.")]
         [Range(0f, 1f)] public float windStrength = 0.12f;
-        public float windSpeed = 1f;
-        [Tooltip("Spatial frequency of the wind waves (lower = broader gusts).")]
-        public float windScale = 0.15f;
 
         [Header("Interaction")]
         [Tooltip("How hard the grass flattens under players/interactors. (0 for flat moss.)")]

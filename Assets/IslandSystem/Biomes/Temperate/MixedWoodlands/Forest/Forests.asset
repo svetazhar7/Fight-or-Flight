@@ -96,13 +96,13 @@ MonoBehaviour:
     prefabWeights:
     - 1
     count: 10
-    density: 0.5
+    density: 1
     spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 25
+      maxSlope: 60
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
@@ -118,13 +118,13 @@ MonoBehaviour:
     prefabWeights:
     - 1
     count: 10
-    density: 0.3
+    density: 1
     spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 25
+      maxSlope: 60
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
@@ -140,13 +140,13 @@ MonoBehaviour:
     prefabWeights:
     - 1
     count: 20
-    density: 10
+    density: 3
     spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 25
+      maxSlope: 60
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
@@ -168,7 +168,7 @@ MonoBehaviour:
       minHeight: 0.05
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 25
+      maxSlope: 60
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
@@ -180,19 +180,21 @@ MonoBehaviour:
     clusterRadius: 0.5
   - label: bush
     prefabs:
-    - {fileID: 919132149155446097, guid: 428a731d9ae66544ab09ab6719f5f209, type: 3}
+    - {fileID: 919132149155446097, guid: 2c7952595339d994cbb1b5ce475ca821, type: 3}
     - {fileID: 919132149155446097, guid: 877a877d13a96144b99ed12c3cf4088a, type: 3}
+    - {fileID: 919132149155446097, guid: cee7a25bdb743d74992a73fd154dfbc6, type: 3}
     prefabWeights:
-    - 50
-    - 50
+    - 33
+    - 33
+    - 33
     count: 10
-    density: 0.8
+    density: 0.3
     spacingVariation: 0.5
     where:
       minHeight: 0.05
       maxHeight: 0.8
       minSlope: 0
-      maxSlope: 25
+      maxSlope: 60
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
@@ -223,9 +225,9 @@ MonoBehaviour:
   grassLayers:
   - enabled: 1
     name: forest grass
-    density: 750
-    prefab: {fileID: 8061160331623397703, guid: 5b84436f59c413b4fbd36f180a8517bb, type: 3}
-    prefabScaleRange: {x: 0.55, y: 1}
+    density: 900
+    prefab: {fileID: 8061160331623397703, guid: 80ef5c7d9c2404c4cb24776dbd44f087, type: 3}
+    prefabScaleRange: {x: 1.5, y: 1.5}
     layFlat: 0
     alphaCutoff: 0.5
     bottomColor: {r: 0.467253, g: 0.8490566, b: 0.40392157, a: 1}

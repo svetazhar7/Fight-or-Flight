@@ -23,8 +23,6 @@ Shader "IslandSystem/Grass"
         _FadeEnd   ("Distance Fade End (m)",   Float) = 100001
         _WindHeight   ("Wind Height (blade height)", Float) = 0.5
         _WindStrength ("Wind Strength", Float) = 0.15
-        _WindSpeed    ("Wind Speed",    Float) = 1.0
-        _WindScale    ("Wind Scale",    Float) = 0.15
         _BendStrength ("Interactor Bend", Float) = 1.0
         _AmbientBoost ("Ambient Boost", Range(0,1)) = 0.35
     }
@@ -39,6 +37,11 @@ Shader "IslandSystem/Grass"
         float4 _GrassInteractors[MAX_GRASS_INTERACTORS]; // xyz world pos, w radius
         int    _GrassInteractorCount;
 
+        // ONE island-wide wind field (set globally by IslandWind): grass, flowers and bushes all read the
+        // same phase parameters, so everything sways TOGETHER — per-material values would drift out of sync.
+        float _IslandWindSpeed;   // default 1.1 (IslandWind.Apply)
+        float _IslandWindScale;   // default 0.15
+
         StructuredBuffer<float4x4> _PerInstanceData;     // per-instance WORLD matrices (ALL instances of the chunk)
         StructuredBuffer<uint>     _VisibleIDs;          // ids that survived GPU frustum culling (GrassFrustumCull.compute)
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
@@ -49,7 +52,7 @@ Shader "IslandSystem/Grass"
             float4 _DryBottomColor, _DryTopColor;
             float  _Cutoff, _Tiles, _ColorVariation, _VariationScale;
             float  _FadeStart, _FadeEnd;
-            float  _WindHeight, _WindStrength, _WindSpeed, _WindScale, _BendStrength, _AmbientBoost;
+            float  _WindHeight, _WindStrength, _BendStrength, _AmbientBoost;
         CBUFFER_END
 
         // Cheap 2D value noise for the large-scale colour variation. WORLD-space input → patches are
@@ -103,7 +106,7 @@ Shader "IslandSystem/Grass"
             // Bend from OBJECT-space height (root = 0, tip = 1) — root is pinned, only the tips sway.
             float bend = saturate(posOS.y / max(0.01, _WindHeight));
 
-            float2 wp = posWS.xz * _WindScale; float ph = _Time.y * _WindSpeed;
+            float2 wp = posWS.xz * _IslandWindScale; float ph = _Time.y * _IslandWindSpeed;
             float w = sin(ph + wp.x + wp.y) + 0.5 * sin(ph * 1.7 + wp.x * 0.7 - wp.y * 1.3);
             posWS.x += w * _WindStrength * bend;
             posWS.z += 0.6 * w * _WindStrength * bend;

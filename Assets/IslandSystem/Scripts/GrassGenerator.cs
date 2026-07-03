@@ -271,8 +271,6 @@ namespace IslandSystem
             // Object-space blade height (the shader bends by positionOS.y / _WindHeight, so NO instance scale here).
             m.SetFloat("_WindHeight", Mathf.Max(0.05f, mesh.bounds.size.y));
             m.SetFloat("_WindStrength", gs.windStrength);
-            m.SetFloat("_WindSpeed", gs.windSpeed);
-            m.SetFloat("_WindScale", gs.windScale);
             m.SetFloat("_BendStrength", gs.bendStrength);
             m.SetFloat("_AmbientBoost", 0.18f); // gentle ambient so grass isn't washed-out/neon
             _mats[gs] = m;
