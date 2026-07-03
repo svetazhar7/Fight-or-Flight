@@ -379,6 +379,9 @@ namespace IslandSystem
             if (waterMaterial != null)
             {
                 renderer.sharedMaterial = waterMaterial;
+                // Poseidon needs a water body to feed the wave-time material floats; we don't use AreaWater
+                // (crashes on rect outlines), so this drives the animation on the plain plane instead.
+                ocean.AddComponent<PoseidonWaterAnimator>();
             }
             else
             {

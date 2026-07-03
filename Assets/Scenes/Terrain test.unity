@@ -30459,6 +30459,7 @@ GameObject:
   - component: {fileID: 495098143}
   - component: {fileID: 495098142}
   - component: {fileID: 495098141}
+  - component: {fileID: 495098144}
   m_Layer: 0
   m_Name: Ocean
   m_TagString: Untagged
@@ -30560,6 +30561,18 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 495098139}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &495098144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 495098139}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4eb96297753175479f32f9144336877, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.PoseidonWaterAnimator
 --- !u!1 &507118889
 GameObject:
   m_ObjectHideFlags: 0
@@ -84639,6 +84652,18 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: sunFilter.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: sunFilter.b
+      value: 0.53
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: sunFilter.g
+      value: 0.83
+      objectReference: {fileID: 0}
+    - target: {fileID: 510582517403770389, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: borderEffect
       value: 1
       objectReference: {fileID: 0}
@@ -84691,12 +84716,16 @@ PrefabInstance:
       value: 0.99947375
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750211098915, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
+      propertyPath: m_Color.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6948066750211098915, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_Color.b
-      value: 1.1535546
+      value: 0.61138386
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750211098915, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_Color.g
-      value: 1.3476623
+      value: 1.1185597
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750211098915, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_Color.r
@@ -84748,7 +84777,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.322403
+      value: -438.33588
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_LocalPosition.y
@@ -84756,7 +84785,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -27.276222
+      value: 251.58702
       objectReference: {fileID: 0}
     - target: {fileID: 6948066750454693066, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_LocalRotation.w
@@ -84820,7 +84849,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7481130337564779861, guid: dbf391fcd50a8b040bb6a47a1c8dc89b, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
