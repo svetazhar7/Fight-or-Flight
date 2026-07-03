@@ -153,6 +153,21 @@ namespace IslandSystem
     }
 
     /// <summary>
+    /// A spawn rule for FLOWERS: placed like trees (density grid + band + conditions), but every accepted
+    /// point becomes a CLUSTER — several flowers strewn within <see cref="clusterRadius"/>, so flowers grow
+    /// in natural patches instead of lone stems. <see cref="ObjectSpawnRule.density"/> = CLUSTERS per 100 m².
+    /// </summary>
+    [Serializable]
+    public class FlowerSpawnRule : ObjectSpawnRule
+    {
+        [Header("Cluster")]
+        [Tooltip("Flowers per cluster — random between x and y (inclusive).")]
+        public Vector2Int clusterSize = new Vector2Int(3, 7);
+        [Tooltip("World radius of one cluster (m); flowers scatter within it around the cluster centre.")]
+        [Min(0.1f)] public float clusterRadius = 2.5f;
+    }
+
+    /// <summary>
     /// A village: one or more zones where the heightmap is FLATTENED to a common level before buildings are
     /// placed on the level ground. Trees/rocks are kept out of these zones. Buildings come from Buildings/.
     /// </summary>
@@ -301,6 +316,9 @@ namespace IslandSystem
 
         [Header("Rocks — GameObjects with per-axis scale (from Rocks/)")]
         public List<ObjectSpawnRule> rockRules = new List<ObjectSpawnRule>();
+
+        [Header("Flowers — clustered props (from Props/): each accepted point spawns a PATCH of flowers")]
+        public List<FlowerSpawnRule> flowerRules = new List<FlowerSpawnRule>();
 
         [Header("Village — flattened build zones (buildings from Buildings/)")]
         public VillageSettings village = new VillageSettings();

@@ -223,6 +223,7 @@ namespace IslandSystem
             IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, villages);
             IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // Unity Terrain tree instances (off villages)
             IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, villages); // rock GameObjects (off villages)
+            IslandTerrainGenerator.ScatterFlowers(terrain, def, seed, bands, villages); // flower CLUSTERS (off villages)
             IslandTerrainGenerator.PlaceVillageBuildings(terrain, villages, seed);    // buildings on the flattened ground
 
             var marker = go.AddComponent<IslandMarker>();
@@ -359,36 +360,103 @@ namespace IslandSystem
             else
             {
                 var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                renderer.sharedMaterial = new Material(shader) { name = "SeabedStub", color = new Color(0.40f, 0.36f, 0.27f, 1f) };
+                // Bright SAND — the seabed reads through the water and drives the shallow turquoise look;
+                // the old muddy olive (0.40,0.36,0.27) made the whole sea murky-dark.
+                renderer.sharedMaterial = new Material(shader) { name = "SeabedStub", color = new Color(0.76f, 0.70f, 0.52f, 1f) };
             }
         }
 
+        /// <summary>Water tile size (m) of the detailed block; the follower snaps to it (lattice-stable).</summary>
+        const float WaterTileSize = 250f;
+        /// <summary>Detailed water tiles per side (block width = count × size, centred on the viewer).</summary>
+        const int WaterTileCount = 4;
+
         void CreateOcean(Transform root, float size)
         {
-            // Flat SQUARE ocean plane carrying the water material. The Poseidon water shader renders fine on
-            // a plain plane; its AreaWater rasterizer crashes on rectangular outlines, so we DON'T use
-            // AreaWater (that's why the ocean used to be a hexagon). The plane is sized larger than the field
-            // so the open sea extends well past the storm-cloud ring (no hard ocean edge near the play area).
-            var ocean = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ocean.name = "Ocean";
+            // NATIVE Poseidon 2 water. Two TileableWater bodies share the water material:
+            //  - "Water Detail": a viewer-following block of finely tessellated tiles — Gerstner waves and
+            //    the low-poly facets actually show near the player;
+            //  - "Water Horizon": one huge low-res tile so the sea reaches past the storm ring (waves are
+            //    sub-vertex out there anyway). Sits a touch lower to never z-fight the detail tiles.
+            // The PlanarReflectionRenderer (on the detail body) writes the mirrored sky/sun/cloud texture
+            // into the SHARED material, so both bodies reflect. Tiles are auto-put on the "Water" layer,
+            // which the reflection camera excludes.
+            var ocean = new GameObject("Ocean");
             ocean.transform.SetParent(root, true);
             ocean.transform.position = new Vector3(0f, waterLevel, 0f);
-            ocean.transform.localScale = new Vector3(size / 5f, 1f, size / 5f); // half-extent ≈ fieldSize
 
-            var renderer = ocean.GetComponent<Renderer>();
-            if (waterMaterial != null)
+            // Thin huge collider at the surface for gameplay queries (splash/landing checks).
+            var box = ocean.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, -0.05f, 0f);
+            box.size = new Vector3(size * 2.4f, 0.1f, size * 2.4f);
+
+            if (waterMaterial == null)
             {
-                renderer.sharedMaterial = waterMaterial;
-                // Poseidon needs a water body to feed the wave-time material floats; we don't use AreaWater
-                // (crashes on rect outlines), so this drives the animation on the plain plane instead.
-                ocean.AddComponent<PoseidonWaterAnimator>();
+                Debug.LogWarning("[Archipelago] No water material assigned — ocean water skipped.", this);
+                return;
             }
-            else
+
+            // -- detailed, viewer-following block ------------------------------------------------------
+            var detail = new GameObject("Water Detail");
+            detail.transform.SetParent(ocean.transform, false);
+            var tw = detail.AddComponent<Pinwheel.Poseidon.TileableWater>();
+            tw.material = waterMaterial;
+            tw.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;   // the classic Poseidon low-poly look
+            tw.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
             {
-                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                renderer.sharedMaterial = new Material(shader) { name = "OceanStub", color = new Color(0.15f, 0.45f, 0.75f, 1f) };
-                Debug.LogWarning("[Archipelago] No water material assigned; using a blue URP-lit stub.", this);
+                size = WaterTileSize,
+                resolution = 56,                    // ≈4.5 m between vertices — waves displace nicely
+                needNormals = false,
+                needTangents = false
+            };
+            int half = WaterTileCount / 2;
+            for (int tz = -half; tz < WaterTileCount - half; tz++)
+                for (int tx = -half; tx < WaterTileCount - half; tx++)
+                    tw.GetOrAddTile(tx, tz);
+            tw.GenerateMesh();
+
+            var follow = detail.AddComponent<OceanFollowViewer>();
+            follow.snap = WaterTileSize;
+
+            var refl = detail.AddComponent<Pinwheel.Poseidon.PlanarReflectionRenderer>();
+            refl.textureResolution = 256;
+            refl.reflectionLayers = ~((1 << LayerMask.NameToLayer("Water")) | (1 << LayerMask.NameToLayer("UI")));
+
+            // -- horizon sheet -------------------------------------------------------------------------
+            float horizonSize = size * 2.4f;
+            var horizon = new GameObject("Water Horizon");
+            horizon.transform.SetParent(ocean.transform, false);
+            horizon.transform.localPosition = new Vector3(-horizonSize * 0.5f, -0.1f, -horizonSize * 0.5f);
+            var twh = horizon.AddComponent<Pinwheel.Poseidon.TileableWater>();
+            twh.material = waterMaterial;
+            twh.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;
+            twh.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
+            {
+                size = horizonSize,
+                resolution = 48,
+                needNormals = false,
+                needTangents = false
+            };
+            twh.GetOrAddTile(0, 0);
+            twh.GenerateMesh();
+        }
+
+        /// <summary>Rebuild ONLY the ocean water (native Poseidon setup) without regenerating the islands.</summary>
+        [ContextMenu("Rebuild Ocean")]
+        public void RebuildOcean()
+        {
+            var root = transform.Find(RootName);
+            if (root == null) { Debug.LogWarning("[Archipelago] No generated archipelago found.", this); return; }
+            var old = root.Find("Ocean");
+            float size = oceanSize;
+            var seabed = root.Find("Seabed");
+            if (seabed != null) size = seabed.localScale.x * 10f / 2.4f;   // recover fieldSize from the seabed span
+            if (old != null)
+            {
+                if (Application.isPlaying) Destroy(old.gameObject);
+                else DestroyImmediate(old.gameObject);
             }
+            CreateOcean(root, size);
         }
 
         void CleanGeneratedTerrain()

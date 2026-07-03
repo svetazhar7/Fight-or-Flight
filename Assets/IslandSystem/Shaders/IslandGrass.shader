@@ -112,7 +112,16 @@ Shader "IslandSystem/Grass"
             {
                 float ir = _GrassInteractors[k].w; if (ir <= 0.0) continue;
                 float2 d = posWS.xz - _GrassInteractors[k].xz; float dl = length(d);
-                if (dl < ir) { float f = (1 - dl / ir) * _BendStrength * bend; posWS.xz += normalize(d + 1e-4) * f * ir * 0.35; posWS.y -= f * 0.5; }
+                if (dl < ir)
+                {
+                    // Fade with VERTICAL distance too — the player FLIES, and without this the grass
+                    // flattened in a circle under them from any altitude. Full effect near the ground,
+                    // gone once the interactor is ~1.5×radius above the blades.
+                    float vfall = saturate(1.0 - abs(posWS.y - _GrassInteractors[k].y) / max(1.0, ir * 1.5));
+                    float f = (1 - dl / ir) * _BendStrength * bend * vfall;
+                    posWS.xz += normalize(d + 1e-4) * f * ir * 0.35;
+                    posWS.y -= f * 0.5;
+                }
             }
 
             // Cyanilux flipbook: the texture is an NxN atlas of blade-clump variants; each instance picks a

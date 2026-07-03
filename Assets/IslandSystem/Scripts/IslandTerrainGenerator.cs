@@ -848,6 +848,102 @@ namespace IslandSystem
             }
         }
 
+        /// <summary>
+        /// Scatters the biomes' FLOWER rules as GameObjects under a "Flowers" holder. Placement works like
+        /// trees (density grid + band + condition, off villages), but every accepted point becomes a CLUSTER:
+        /// clusterSize.x..y flowers strewn within clusterRadius — flowers grow in natural patches. Flowers of
+        /// a cluster that fall off the band / into water / into a village are trimmed individually.
+        /// </summary>
+        public static void ScatterFlowers(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
+        {
+            if (bands == null) return;
+            var data = terrain.terrainData;
+            Vector3 origin = terrain.transform.position;
+
+            var existing = terrain.transform.Find("Flowers");
+            if (existing != null)
+            {
+                if (Application.isPlaying) Object.Destroy(existing.gameObject);
+                else Object.DestroyImmediate(existing.gameObject);
+            }
+            bool any = false;
+            foreach (var band in bands)
+                if (band.biome != null && band.biome.flowerRules != null && band.biome.flowerRules.Count > 0) { any = true; break; }
+            if (!any) return;
+
+            Transform holder = new GameObject("Flowers").transform;
+            holder.SetParent(terrain.transform, false);
+
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                if (band.biome == null || band.biome.flowerRules == null) continue;
+                int ruleIndex = 0;
+                foreach (var rule in band.biome.flowerRules)
+                {
+                    ruleIndex++;
+                    if (rule == null || rule.prefabs == null || rule.prefabs.Length == 0) continue;
+
+                    // density = CLUSTERS per 100 m² -> jittered grid of cluster centres (same scheme as trees).
+                    float density = rule.density > 0f ? rule.density : 1f;
+                    float spacing = 10f / Mathf.Sqrt(density);
+                    int gx = Mathf.Max(1, Mathf.CeilToInt(data.size.x / spacing));
+                    int gz = Mathf.Max(1, Mathf.CeilToInt(data.size.z / spacing));
+                    var rng = new System.Random((seed + bi * 131) * 48271 ^ ruleIndex * 28657);
+                    const float jitter = 0.8f;
+
+                    for (int iz = 0; iz < gz; iz++)
+                    {
+                        for (int ix = 0; ix < gx; ix++)
+                        {
+                            float u = Mathf.Clamp01((ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gx);
+                            float v = Mathf.Clamp01((iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gz);
+                            if (InAnyVillage(u, v, data.size, villages)) continue;
+                            float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
+                            if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
+                            float slopeDeg = data.GetSteepness(u, v);
+                            if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
+
+                            // One CLUSTER at this point: the first flower sits at the centre, the rest scatter
+                            // uniformly inside the cluster disc.
+                            int count = rng.Next(rule.clusterSize.x, rule.clusterSize.y + 1);
+                            float cx = u * data.size.x, cz = v * data.size.z;
+                            for (int i = 0; i < count; i++)
+                            {
+                                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                                float rad = i == 0 ? 0f : rule.clusterRadius * Mathf.Sqrt((float)rng.NextDouble());
+                                float wx = cx + Mathf.Cos(ang) * rad;
+                                float wz = cz + Mathf.Sin(ang) * rad;
+                                float fu = Mathf.Clamp01(wx / data.size.x), fv = Mathf.Clamp01(wz / data.size.z);
+                                float fh01 = data.GetInterpolatedHeight(fu, fv) / Mathf.Max(0.0001f, data.size.y);
+                                if (fh01 < FadeThreshold || fh01 < band.lo || fh01 > band.hi) continue;
+                                if (InAnyVillage(fu, fv, data.size, villages)) continue;
+
+                                int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
+                                var prefab = rule.prefabs[idx];
+                                if (prefab == null) continue;
+                                float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
+                                if (s <= 0f) s = 1f;
+
+                                Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(fu, fv) - rule.sink, wz);
+                                GameObject go = Object.Instantiate(prefab, holder);
+                                go.transform.position = worldPos;
+
+                                Quaternion rot = rule.alignToNormal
+                                    ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(fu, fv))
+                                    : Quaternion.identity;
+                                if (rule.randomYRotation)
+                                    rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                                go.transform.rotation = rot;
+                                go.transform.localScale = go.transform.localScale * s;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         /// <summary>Approx horizontal footprint radius (world units) of a prefab from its mesh bounds × scale.</summary>
         static float PrototypeRadius(GameObject prefab)
         {

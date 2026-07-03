@@ -121,7 +121,7 @@ Material:
     - _Blend: 0
     - _BumpScale: 1
     - _CausticDistortionStrength: 1
-    - _CausticSize: 10
+    - _CausticSize: 12
     - _CausticStrength: 3
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
@@ -133,7 +133,7 @@ Material:
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _EnvironmentReflections: 1
-    - _FoamDistance: 1
+    - _FoamDistance: 2.5
     - _FoamNoiseScaleHQ: 5
     - _FoamNoiseSpeedHQ: 5
     - _FresnelBias: 0
@@ -141,7 +141,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _MaxDepth: 5
+    - _MaxDepth: 7
     - _MeshNoise: 1
     - _Metallic: 0
     - _NormalAmplitude1: 0.29
@@ -160,33 +160,33 @@ Material:
     - _ReflectionDistortionStrength: 20
     - _ReflectionStrength: 0.75
     - _RefractionDistortionStrength: 10
-    - _RippleHeight: 0.1
+    - _RippleHeight: 0.15
     - _RippleNoiseScale: 5
     - _RippleSpeed: 2
     - _ShorelineFoamStrength: 1
-    - _Smoothness: 0.9
+    - _Smoothness: 0.82
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _Surface: 0
     - _VertexNormalError: 3.44
     - _WaveDeform: 1
-    - _WaveHeight: 0.5
-    - _WaveLength: 40
+    - _WaveHeight: 0.6
+    - _WaveLength: 45
     - _WaveSpeed: 5
     - _WaveSteepness: 0.5
     - _WorkflowMode: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _Color: {r: 0, g: 0.4, b: 0.45, a: 0.7}
-    - _DepthColor: {r: 0.05, g: 0.18, b: 0.28, a: 1}
+    - _Color: {r: 0.21999997, g: 0.78, b: 0.72, a: 0.9}
+    - _DepthColor: {r: 0.02, g: 0.43, b: 0.55, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
     - _NormalSlidingDirection1: {r: 1, g: 1, b: 0, a: 0}
     - _NormalSlidingDirection2: {r: -1, g: 1, b: 0, a: 0}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
-    - _Specular: {r: 0.19245279, g: 0.19245279, b: 0.19245279, a: 1}
+    - _Specular: {r: 1, g: 0.95, b: 0.85, a: 1}
     - _WaveDirection: {r: 0.71, g: 0.71, b: 0, a: 0}
     - _WaveMaskBounds: {r: -25, g: -25, b: 300, a: 300}
   m_BuildTextureStacks: []

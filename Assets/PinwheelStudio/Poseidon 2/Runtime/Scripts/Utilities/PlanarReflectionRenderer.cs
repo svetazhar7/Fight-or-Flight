@@ -115,6 +115,23 @@ namespace Pinwheel.Poseidon
         private RenderTexture m_reflectionTexture;
         private Camera m_reflectionCamera;
 
+        // Edit-mode / no-main-camera fallback: a flat SKY-BLUE reflection reads much closer to the real
+        // mirrored sky than Texture2D.whiteTexture, which washed the whole sea out to milk in the editor.
+        private static Texture2D s_fallbackSkyTex;
+        private static Texture FallbackSkyTexture
+        {
+            get
+            {
+                if (s_fallbackSkyTex == null)
+                {
+                    s_fallbackSkyTex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
+                    s_fallbackSkyTex.SetPixel(0, 0, new Color(0.60f, 0.78f, 0.90f, 1f));
+                    s_fallbackSkyTex.Apply();
+                }
+                return s_fallbackSkyTex;
+            }
+        }
+
         private void Reset()
         {
             m_textureResolution = 128;
@@ -153,6 +170,13 @@ namespace Pinwheel.Poseidon
 
         private void OnCameraPreCullBiRP(Camera cam)
         {
+            if (mainCamera == null)
+            {
+                // No main camera yet (networked player not spawned / edit mode): fall back to the flat white
+                // reflection so the water reads bright instead of mirror-black.
+                if (planarWaterBody != null) planarWaterBody.SetPlanarReflectionTexture(FallbackSkyTexture);
+                return;
+            }
             if (Application.isPlaying)
             {
                 bool isBackface = mainCamera.transform.position.y < transform.position.y;
@@ -240,7 +264,7 @@ namespace Pinwheel.Poseidon
             {
                 if (planarWaterBody != null)
                 {
-                    planarWaterBody.SetPlanarReflectionTexture(Texture2D.whiteTexture);
+                    planarWaterBody.SetPlanarReflectionTexture(FallbackSkyTexture);
                 }
             }
         }
@@ -248,6 +272,13 @@ namespace Pinwheel.Poseidon
 #if POSEIDON_2_URP
         private void OnBeginContextRenderingSRP(ScriptableRenderContext context, List<Camera> cameras)
         {
+            if (mainCamera == null)
+            {
+                // No main camera yet (networked player not spawned / edit mode): fall back to the flat white
+                // reflection so the water reads bright instead of mirror-black.
+                if (planarWaterBody != null) planarWaterBody.SetPlanarReflectionTexture(FallbackSkyTexture);
+                return;
+            }
             if (Application.isPlaying)
             {
                 bool isBackface = mainCamera.transform.position.y < transform.position.y;
@@ -336,7 +367,7 @@ namespace Pinwheel.Poseidon
             {
                 if (planarWaterBody != null)
                 {
-                    planarWaterBody.SetPlanarReflectionTexture(Texture2D.whiteTexture);
+                    planarWaterBody.SetPlanarReflectionTexture(FallbackSkyTexture);
                 }
             }
         }
