@@ -56,6 +56,34 @@ namespace IslandSystem
         const string SegPrefix = "StormSeg_";
         const string DefaultMaterialPath = "Assets/StormWall/StormCloud.mat";
 
+        [SerializeField, HideInInspector] float radius;
+        /// <summary>Mean ring radius the wall was last built at (world units). Falls back to the mean distance
+        /// of the existing segments if it wasn't recorded (e.g. a wall saved before this field existed).</summary>
+        public float Radius
+        {
+            get
+            {
+                if (radius > 1f) return radius;
+                int n = 0; float sum = 0f;
+                foreach (Transform c in transform)
+                    if (c.name.StartsWith(SegPrefix)) { sum += new Vector2(c.position.x, c.position.z).magnitude; n++; }
+                return n > 0 ? (radius = sum / n) : 0f;
+            }
+        }
+
+        /// <summary>
+        /// Is <paramref name="worldPos"/> inside the storm band? The clouds ring is centred on world origin
+        /// (segment positions are absolute), so we test horizontal distance-from-origin against the wall's
+        /// inner face (<c>Radius − depth/2</c>), pulled inward by <paramref name="inset"/> so the storm can
+        /// start biting a little before you reach the visible wall.
+        /// </summary>
+        public bool IsInsideStorm(Vector3 worldPos, float inset = 0f)
+        {
+            if (Radius <= 1f) return false;
+            float d = new Vector2(worldPos.x, worldPos.z).magnitude;
+            return d >= Radius - depth * 0.5f - Mathf.Max(0f, inset);
+        }
+
         /// <summary>Rebuild using the auto-detected ocean extent (or fallback). Safe to call from the editor.</summary>
         [ContextMenu("Rebuild Storm Wall")]
         public void Rebuild()
@@ -70,6 +98,7 @@ namespace IslandSystem
         public void Rebuild(float oceanHalfExtent)
         {
             float radius = (oceanHalfExtent > 1f ? oceanHalfExtent : fallbackRadius) + margin;
+            this.radius = radius;   // remembered for the storm-band gameplay test (StormLightning)
 
             Clear();
             ResolveMaterial();

@@ -95,8 +95,8 @@ MonoBehaviour:
     - {fileID: 919132149155446097, guid: b2490b8c2ee050b4a8d6323eee80a63d, type: 3}
     prefabWeights:
     - 1
-    count: 10
-    density: 1
+    count: 2
+    density: 0.3
     spacingVariation: 0.5
     where:
       minHeight: 0.05
@@ -110,15 +110,15 @@ MonoBehaviour:
     alignToNormal: 0
     sink: 0.02
     nonUniformScale: 0
-    clusterSize: {x: 5, y: 7}
-    clusterRadius: 2.5
+    clusterSize: {x: 1, y: 3}
+    clusterRadius: 1
   - label: yellow
     prefabs:
     - {fileID: 919132149155446097, guid: 6642d045fece0b44ca0fb3a24b16db5c, type: 3}
     prefabWeights:
     - 1
-    count: 10
-    density: 1
+    count: 2
+    density: 0.3
     spacingVariation: 0.5
     where:
       minHeight: 0.05
@@ -132,15 +132,15 @@ MonoBehaviour:
     alignToNormal: 0
     sink: 0.02
     nonUniformScale: 0
-    clusterSize: {x: 2, y: 4}
-    clusterRadius: 2.5
+    clusterSize: {x: 1, y: 3}
+    clusterRadius: 1
   - label: chamomile
     prefabs:
     - {fileID: 919132149155446097, guid: 85cbb5678d115c04e8b0c0581f8d8c62, type: 3}
     prefabWeights:
     - 1
-    count: 20
-    density: 3
+    count: 3
+    density: 1
     spacingVariation: 0.5
     where:
       minHeight: 0.05
@@ -156,28 +156,6 @@ MonoBehaviour:
     nonUniformScale: 0
     clusterSize: {x: 8, y: 12}
     clusterRadius: 5
-  - label: fern
-    prefabs:
-    - {fileID: 919132149155446097, guid: 38131452f7b427744ad6054a7344a265, type: 3}
-    prefabWeights:
-    - 1
-    count: 20
-    density: 0.8
-    spacingVariation: 0.5
-    where:
-      minHeight: 0.05
-      maxHeight: 0.8
-      minSlope: 0
-      maxSlope: 60
-      heightBlend: 0.08
-      slopeBlend: 10
-    scaleRange: {x: 0.8, y: 0.8}
-    randomYRotation: 1
-    alignToNormal: 0
-    sink: 0.02
-    nonUniformScale: 0
-    clusterSize: {x: 1, y: 1}
-    clusterRadius: 0.5
   - label: bush
     prefabs:
     - {fileID: 919132149155446097, guid: 2c7952595339d994cbb1b5ce475ca821, type: 3}
@@ -225,7 +203,7 @@ MonoBehaviour:
   grassLayers:
   - enabled: 1
     name: forest grass
-    density: 900
+    density: 300
     prefab: {fileID: 8061160331623397703, guid: 80ef5c7d9c2404c4cb24776dbd44f087, type: 3}
     prefabScaleRange: {x: 1.5, y: 1.5}
     layFlat: 0
@@ -238,8 +216,6 @@ MonoBehaviour:
     dryTopColor: {r: 0.5686275, g: 0.68235296, b: 0.3019608, a: 1}
     variationScale: 0.7
     windStrength: 0.13
-    windSpeed: 1.1
-    windScale: 0.15
     bendStrength: 1
     where:
       minHeight: 0
