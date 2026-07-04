@@ -375,21 +375,22 @@ namespace IslandSystem
             }
         }
 
-        /// <summary>Water tile size (m) of the detailed block; the follower snaps to it (lattice-stable).</summary>
-        const float WaterTileSize = 250f;
-        /// <summary>Detailed water tiles per side (block width = count × size, centred on the viewer).</summary>
-        const int WaterTileCount = 4;
+        /// <summary>Water tile size (m) — matches Poseidon's Tileable demo (fine 1 m verts for real waves).</summary>
+        const float WaterTileSize = 100f;
+        /// <summary>Vertices per tile side (Poseidon demo uses 100 → ~1 m facets).</summary>
+        const int WaterTileRes = 100;
+        /// <summary>Detailed tiles per side of the viewer-following block (6 × 100 m = 600 m of detailed sea).</summary>
+        const int WaterTileCount = 6;
 
         void CreateOcean(Transform root, float size)
         {
-            // NATIVE Poseidon 2 water. Two TileableWater bodies share the water material:
-            //  - "Water Detail": a viewer-following block of finely tessellated tiles — Gerstner waves and
-            //    the low-poly facets actually show near the player;
-            //  - "Water Horizon": one huge low-res tile so the sea reaches past the storm ring (waves are
-            //    sub-vertex out there anyway). Sits a touch lower to never z-fight the detail tiles.
-            // The PlanarReflectionRenderer (on the detail body) writes the mirrored sky/sun/cloud texture
-            // into the SHARED material, so both bodies reflect. Tiles are auto-put on the "Water" layer,
-            // which the reflection camera excludes.
+            // NATIVE Poseidon 2 water, built like the "Demo_LowPolyWater_Tileable" reference:
+            //  - "Water Detail": a viewer-following block of finely tessellated hexagon tiles — the Gerstner
+            //    WAVES and the low-poly facets actually show near the player;
+            //  - "Water Horizon": one huge low-res tile so the open sea reaches past the storm ring;
+            //  - PlanarReflectionRenderer mirrors the sky + SUN + clouds into the shared material each frame;
+            //  - OceanTide slowly raises/lowers the whole ocean (приливы/отливы) on top of the fast waves.
+            // Tiles auto-go on the "Water" layer (excluded from the reflection camera).
             var ocean = new GameObject("Ocean");
             ocean.transform.SetParent(root, true);
             ocean.transform.position = new Vector3(0f, waterLevel, 0f);
@@ -405,19 +406,16 @@ namespace IslandSystem
                 return;
             }
 
+            var tideDesc = new Pinwheel.Poseidon.TileMeshDesc
+            { size = WaterTileSize, resolution = WaterTileRes, needNormals = false, needTangents = false };
+
             // -- detailed, viewer-following block ------------------------------------------------------
             var detail = new GameObject("Water Detail");
             detail.transform.SetParent(ocean.transform, false);
             var tw = detail.AddComponent<Pinwheel.Poseidon.TileableWater>();
             tw.material = waterMaterial;
             tw.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;   // the classic Poseidon low-poly look
-            tw.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
-            {
-                size = WaterTileSize,
-                resolution = 56,                    // ≈4.5 m between vertices — waves displace nicely
-                needNormals = false,
-                needTangents = false
-            };
+            tw.tileMeshDesc = tideDesc;
             int half = WaterTileCount / 2;
             for (int tz = -half; tz < WaterTileCount - half; tz++)
                 for (int tx = -half; tx < WaterTileCount - half; tx++)
@@ -428,7 +426,7 @@ namespace IslandSystem
             follow.snap = WaterTileSize;
 
             var refl = detail.AddComponent<Pinwheel.Poseidon.PlanarReflectionRenderer>();
-            refl.textureResolution = 256;
+            refl.textureResolution = 512;   // crisp sun/sky reflection
             refl.reflectionLayers = ~((1 << LayerMask.NameToLayer("Water")) | (1 << LayerMask.NameToLayer("UI")));
 
             // -- horizon sheet -------------------------------------------------------------------------
@@ -440,14 +438,15 @@ namespace IslandSystem
             twh.material = waterMaterial;
             twh.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;
             twh.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
-            {
-                size = horizonSize,
-                resolution = 48,
-                needNormals = false,
-                needTangents = false
-            };
+            { size = horizonSize, resolution = 48, needNormals = false, needTangents = false };
             twh.GetOrAddTile(0, 0);
             twh.GenerateMesh();
+
+            // -- tides (slow vertical swing of the whole ocean) ----------------------------------------
+            var tide = ocean.AddComponent<OceanTide>();
+            tide.seaLevel = waterLevel;
+            tide.amplitude = 1.5f;
+            tide.period = 120f;
         }
 
         /// <summary>Rebuild ONLY the ocean water (native Poseidon setup) without regenerating the islands.</summary>

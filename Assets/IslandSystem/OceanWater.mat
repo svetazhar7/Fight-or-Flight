@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-4290756223696880692
+--- !u!114 &-3421626986028023821
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}
@@ -37,15 +37,63 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _CausticTex:
         m_Texture: {fileID: 2800000, guid: 1f8fbdfd40d5d5b47ac5247693f17781, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailAlbedoMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailNormalMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MetallicGlossMap:
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NoiseTex:
         m_Texture: {fileID: 2800000, guid: 024057ec18266e84b86ce8ec9dfdb537, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: 106ce9ef8cd9679458c577c5253f3cc2, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _OcclusionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ParallaxMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _ReflectionTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SpecGlossMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -67,47 +115,83 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _AlphaClip: 0
     - _BUILTIN_QueueControl: 0
     - _BUILTIN_QueueOffset: 0
+    - _Blend: 0
+    - _BumpScale: 1
     - _CausticDistortionStrength: 1
     - _CausticSize: 12
-    - _CausticStrength: 2.5
-    - _CrestFoamStrength: 0.6
+    - _CausticStrength: 3
+    - _ClearCoatMask: 0
+    - _ClearCoatSmoothness: 0
+    - _CrestFoamStrength: 0.5
     - _CrestMaxDepth: 5
-    - _FoamDistance: 2
+    - _Cull: 2
+    - _Cutoff: 0.5
+    - _DetailAlbedoMapScale: 1
+    - _DetailNormalMapScale: 1
+    - _DstBlend: 0
+    - _EnvironmentReflections: 1
+    - _FoamDistance: 2.5
     - _FoamNoiseScaleHQ: 5
     - _FoamNoiseSpeedHQ: 5
-    - _FresnelBias: 0.02
-    - _FresnelStrength: 0.5
-    - _MaxDepth: 8
+    - _FresnelBias: 0
+    - _FresnelStrength: 0.4
+    - _GlossMapScale: 0
+    - _Glossiness: 0
+    - _GlossyReflections: 0
+    - _MaxDepth: 7
     - _MeshNoise: 1
-    - _PoseidonSineTime: 0.42621684
-    - _PoseidonTime: 3917.1257
+    - _Metallic: 0
+    - _NormalAmplitude1: 0.29
+    - _NormalAmplitude2: 0.376
+    - _NormalScale1: 5.56
+    - _NormalScale2: 4.48
+    - _NormalSlidingSpeed1: 0.5
+    - _NormalSlidingSpeed2: 0.56
+    - _OcclusionStrength: 1
+    - _Parallax: 0.005
+    - _PoseidonSineTime: 0.6246875
+    - _PoseidonTime: 8.750047
     - _QueueControl: 0
     - _QueueOffset: 0
+    - _ReceiveShadows: 1
     - _ReflectionDistortionStrength: 20
-    - _ReflectionStrength: 0.7
+    - _ReflectionStrength: 0.75
     - _RefractionDistortionStrength: 10
-    - _RippleHeight: 0.12
+    - _RippleHeight: 0.15
     - _RippleNoiseScale: 5
     - _RippleSpeed: 2
     - _ShorelineFoamStrength: 1
-    - _Smoothness: 0.85
+    - _Smoothness: 0.86
+    - _SmoothnessTextureChannel: 0
+    - _SpecularHighlights: 1
+    - _SrcBlend: 1
+    - _Surface: 0
+    - _VertexNormalError: 3.44
     - _WaveDeform: 1
-    - _WaveHeight: 0.55
-    - _WaveLength: 42
-    - _WaveSpeed: 4
+    - _WaveHeight: 0.9
+    - _WaveLength: 55
+    - _WaveSpeed: 5
     - _WaveSteepness: 0.5
+    - _WorkflowMode: 1
+    - _ZWrite: 1
     m_Colors:
-    - _Color: {r: 0.25, g: 0.85, b: 0.78, a: 0.8}
-    - _DepthColor: {r: 0.02, g: 0.47, b: 0.58, a: 1}
+    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.21999997, g: 0.78, b: 0.72, a: 0.9}
+    - _DepthColor: {r: 0.02, g: 0.43, b: 0.55, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
+    - _NormalSlidingDirection1: {r: 1, g: 1, b: 0, a: 0}
+    - _NormalSlidingDirection2: {r: -1, g: 1, b: 0, a: 0}
+    - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _Specular: {r: 1, g: 0.97, b: 0.9, a: 1}
     - _WaveDirection: {r: 0.71, g: 0.71, b: 0, a: 0}
-    - _WaveMaskBounds: {r: 0, g: 0, b: 0, a: 0}
+    - _WaveMaskBounds: {r: -25, g: -25, b: 300, a: 300}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!114 &1981718284920286871
+--- !u!114 &5737810406881856443
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}

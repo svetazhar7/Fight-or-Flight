@@ -15,12 +15,16 @@ namespace IslandSystem
 
         void LateUpdate()
         {
+            // Snap in the PARENT's local space (parent "Ocean" sits at world XZ 0, so local == world XZ). This
+            // way local Y stays 0 and the block INHERITS the parent's Y — the tide (which moves the Ocean root
+            // up/down) carries the following detail tiles with it instead of freezing at one Y.
             Vector3 v = ViewerPos();
-            float sx = Mathf.Round(v.x / snap) * snap;
-            float sz = Mathf.Round(v.z / snap) * snap;
-            var p = transform.position;
-            if (!Mathf.Approximately(p.x, sx) || !Mathf.Approximately(p.z, sz))
-                transform.position = new Vector3(sx, p.y, sz);
+            Vector3 parentPos = transform.parent != null ? transform.parent.position : Vector3.zero;
+            float sx = Mathf.Round((v.x - parentPos.x) / snap) * snap;
+            float sz = Mathf.Round((v.z - parentPos.z) / snap) * snap;
+            var lp = transform.localPosition;
+            if (!Mathf.Approximately(lp.x, sx) || !Mathf.Approximately(lp.z, sz) || lp.y != 0f)
+                transform.localPosition = new Vector3(sx, 0f, sz);
 #if UNITY_EDITOR
             if (!Application.isPlaying) UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
 #endif
