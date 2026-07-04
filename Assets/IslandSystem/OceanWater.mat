@@ -152,8 +152,8 @@ Material:
     - _NormalSlidingSpeed2: 0.56
     - _OcclusionStrength: 1
     - _Parallax: 0.005
-    - _PoseidonSineTime: -0.99025106
-    - _PoseidonTime: 11.135323
+    - _PoseidonSineTime: -0.8589432
+    - _PoseidonTime: 205.23672
     - _QueueControl: 0
     - _QueueOffset: 0
     - _ReceiveShadows: 1

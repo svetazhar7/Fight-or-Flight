@@ -165,7 +165,7 @@ MonoBehaviour:
     - 33
     - 33
     - 33
-    count: 10
+    count: 2
     density: 0.3
     spacingVariation: 0.5
     where:
