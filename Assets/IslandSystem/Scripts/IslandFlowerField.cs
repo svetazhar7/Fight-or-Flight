@@ -20,14 +20,21 @@ namespace IslandSystem
         public Transform viewer;
         public int seed;
         [Tooltip("World size of a flower chunk (m).")]
-        public float chunkSize = 36f;
-        [Tooltip("Flowers exist within this radius of the viewer (m).")]
-        public float viewDistance = 150f;
+        public float chunkSize = 32f;
+        [Tooltip("Flowers exist within this radius of the viewer (m). The IslandSystem/Foliage shader fades " +
+                 "them out just inside this so they appear/vanish smoothly instead of popping.")]
+        public float viewDistance = 110f;
         [Tooltip("Max chunks built per update, so streaming in doesn't hitch.")]
-        public int buildsPerTick = 2;
+        public int buildsPerTick = 3;
 
         /// <summary>Same low-altitude gate the generation-time scatters use (no flowers on the sea fade).</summary>
         const float FadeThreshold = 0.05f;
+
+        // Global shader fade band (IslandSystem/Foliage): flowers/bushes shrink into the ground across it, so
+        // they dissolve in/out with distance like the grass. End sits just inside viewDistance so a plant is
+        // fully gone before its chunk is ever removed.
+        static readonly int FadeStartId = Shader.PropertyToID("_FoliageFadeStart");
+        static readonly int FadeEndId = Shader.PropertyToID("_FoliageFadeEnd");
 
         readonly Dictionary<long, GameObject> _chunks = new Dictionary<long, GameObject>();
         IslandMarker _marker;
@@ -116,6 +123,11 @@ namespace IslandSystem
             var marker = Marker;
             if (terrain == null || marker == null || !HasAnyFlowers(marker.bands)) return;
             _builtThisTick = 0;
+
+            // Drive the shader's smooth distance fade to match this field's radius (shrink to nothing before
+            // the chunk-removal boundary at viewDistance + chunkSize, so nothing ever pops).
+            Shader.SetGlobalFloat(FadeStartId, viewDistance * 0.6f);
+            Shader.SetGlobalFloat(FadeEndId, viewDistance * 0.92f);
 
             Vector3 origin = terrain.transform.position;
             Vector3 size = terrain.terrainData.size;

@@ -136,7 +136,7 @@ MonoBehaviour:
     clusterRadius: 1
   - label: chamomile
     prefabs:
-    - {fileID: 919132149155446097, guid: 85cbb5678d115c04e8b0c0581f8d8c62, type: 3}
+    - {fileID: 919132149155446097, guid: a52d2e9eee4efd44b8b0e1dfb89f270e, type: 3}
     prefabWeights:
     - 1
     count: 3
@@ -159,7 +159,7 @@ MonoBehaviour:
   - label: bush
     prefabs:
     - {fileID: 919132149155446097, guid: 2c7952595339d994cbb1b5ce475ca821, type: 3}
-    - {fileID: 919132149155446097, guid: 877a877d13a96144b99ed12c3cf4088a, type: 3}
+    - {fileID: 919132149155446097, guid: 90af68b03109feb4badad55e52e5dc71, type: 3}
     - {fileID: 919132149155446097, guid: cee7a25bdb743d74992a73fd154dfbc6, type: 3}
     prefabWeights:
     - 33

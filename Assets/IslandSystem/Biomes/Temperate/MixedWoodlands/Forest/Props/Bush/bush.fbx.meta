@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 63dd3aff89eba5d488645ce6b3a59ced
+guid: 90af68b03109feb4badad55e52e5dc71
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
@@ -7,13 +7,8 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: Bark_NormalTree.004
-    second: {fileID: 2100000, guid: 5d0243fa66c6567449a87c6602496836, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Leaves_Pine
-    second: {fileID: 2100000, guid: 94e214df36ec2a04d94684be59d6f417, type: 2}
+      name: Leaves_TwistedTree
+    second: {fileID: 2100000, guid: 4edebf7d3fd19524f850a534e9e8cf80, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

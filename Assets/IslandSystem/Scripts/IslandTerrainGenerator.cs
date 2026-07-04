@@ -725,20 +725,25 @@ namespace IslandSystem
         public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             var data = terrain.terrainData;
-            // Drop any legacy terrain-tree instances (we now use GameObjects).
+            // Drop any legacy terrain-tree instances (we GPU-instance trees now).
             if (data.treePrototypes.Length > 0) { data.treePrototypes = new TreePrototype[0]; data.SetTreeInstances(new TreeInstance[0], true); }
             if (bands == null) return;
             Vector3 origin = terrain.transform.position;
 
-            // Fresh holder for this terrain's trees.
-            var existing = terrain.transform.Find("Trees");
-            if (existing != null)
+            // Remove any legacy per-tree GameObject holder from an older generation.
+            var legacy = terrain.transform.Find("Trees");
+            if (legacy != null)
             {
-                if (Application.isPlaying) Object.Destroy(existing.gameObject);
-                else Object.DestroyImmediate(existing.gameObject);
+                if (Application.isPlaying) Object.Destroy(legacy.gameObject);
+                else Object.DestroyImmediate(legacy.gameObject);
             }
-            Transform holder = new GameObject("Trees").transform;
-            holder.SetParent(terrain.transform, false);
+
+            // Trees are GPU-instanced (Graphics.RenderMeshInstanced) via IslandTreeRenderer — no per-tree
+            // GameObjects. Fully visible at any distance / from above, but a few batched draws culled by the
+            // island's bounds instead of thousands of per-object culls.
+            var treeRenderer = terrain.GetComponent<IslandTreeRenderer>();
+            if (treeRenderer == null) treeRenderer = terrain.gameObject.AddComponent<IslandTreeRenderer>();
+            treeRenderer.BeginBuild();
 
             // Footprint radius per prefab (for the no-overlap test) + the largest scale, plus the widest
             // spacing any rule asks for (density + its variation) — both feed the accel-grid cell size.
@@ -843,22 +848,20 @@ namespace IslandSystem
                         // Claim max(spacing, footprint) so neighbours keep the gap AND never physically overlap.
                         Register(wx, wz, Mathf.Max(sep * 0.5f, pr * s));
 
-                        // Instantiate the tree GameObject and apply position (sunk), rotation and scale.
-                        // Plain Instantiate (not PrefabUtility) — far faster for thousands of procedural trees.
+                        // Record the instance for GPU-instanced drawing (scale folds in the prefab root scale,
+                        // exactly like setting go.localScale = prefabRootScale * s on an instantiated object).
                         Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(u, v) - rule.sink, wz);
-                        GameObject go = Object.Instantiate(prefab, holder);
-                        go.transform.position = worldPos;
-
                         Quaternion rot = rule.alignToNormal
                             ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v))
                             : Quaternion.identity;
                         if (rule.randomYRotation)
                             rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                        go.transform.rotation = rot;
-                        go.transform.localScale = go.transform.localScale * s;
+                        treeRenderer.Add(prefab, worldPos, rot, prefab.transform.localScale * s);
                     }
                 }
             }
+
+            treeRenderer.Finish();
         }
 
 

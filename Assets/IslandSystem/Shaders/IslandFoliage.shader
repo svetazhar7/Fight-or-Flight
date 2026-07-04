@@ -37,6 +37,23 @@ Shader "IslandSystem/Foliage"
         float _IslandWindSpeed;
         float _IslandWindScale;
 
+        // Distance fade (set globally by IslandFlowerField, matching the grass fade): the plant SHRINKS into
+        // its root as it nears the streaming radius, so flowers/bushes appear and vanish SMOOTHLY like grass
+        // instead of popping when a chunk (de)spawns. Uses the object pivot's XZ distance to the render camera
+        // — the same camera the flowers stream around. Disabled while unset (End <= Start), so any foliage that
+        // isn't streamed renders at full size.
+        float _FoliageFadeStart;
+        float _FoliageFadeEnd;
+
+        float3 FoliageFadeOS(float3 positionOS)
+        {
+            if (_FoliageFadeEnd <= _FoliageFadeStart + 0.5) return positionOS;
+            float3 rootWS = float3(unity_ObjectToWorld._m03, unity_ObjectToWorld._m13, unity_ObjectToWorld._m23);
+            float dCam = distance(rootWS.xz, _WorldSpaceCameraPos.xz);
+            float fade = saturate((dCam - _FoliageFadeStart) / (_FoliageFadeEnd - _FoliageFadeStart));
+            return positionOS * (1.0 - fade);   // collapse toward the (ground-level) pivot
+        }
+
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap);
 
@@ -113,8 +130,9 @@ Shader "IslandSystem/Foliage"
             Varyings vert (Attributes IN)
             {
                 Varyings o = (Varyings)0;
-                float3 posWS = TransformObjectToWorld(IN.positionOS.xyz);
-                posWS = ApplyFoliageWind(posWS, IN.positionOS.xyz);
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                float3 posWS = TransformObjectToWorld(posOS);
+                posWS = ApplyFoliageWind(posWS, posOS);
 
                 VertexNormalInputs ni = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
                 o.positionCS = TransformWorldToHClip(posWS);
@@ -195,8 +213,9 @@ Shader "IslandSystem/Foliage"
             V shadowVert (A IN)
             {
                 V o;
-                float3 posWS = TransformObjectToWorld(IN.positionOS.xyz);
-                posWS = ApplyFoliageWind(posWS, IN.positionOS.xyz);
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                float3 posWS = TransformObjectToWorld(posOS);
+                posWS = ApplyFoliageWind(posWS, posOS);
                 float3 nWS = TransformObjectToWorldNormal(IN.normalOS);
             #if _CASTING_PUNCTUAL_LIGHT_SHADOW
                 float3 lightDir = normalize(_LightPosition - posWS);
@@ -242,8 +261,9 @@ Shader "IslandSystem/Foliage"
             V depthVert (A IN)
             {
                 V o;
-                float3 posWS = TransformObjectToWorld(IN.positionOS.xyz);
-                posWS = ApplyFoliageWind(posWS, IN.positionOS.xyz);
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                float3 posWS = TransformObjectToWorld(posOS);
+                posWS = ApplyFoliageWind(posWS, posOS);
                 o.positionCS = TransformWorldToHClip(posWS);
                 o.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
                 return o;
@@ -277,8 +297,9 @@ Shader "IslandSystem/Foliage"
             V dnVert (A IN)
             {
                 V o;
-                float3 posWS = TransformObjectToWorld(IN.positionOS.xyz);
-                posWS = ApplyFoliageWind(posWS, IN.positionOS.xyz);
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                float3 posWS = TransformObjectToWorld(posOS);
+                posWS = ApplyFoliageWind(posWS, posOS);
                 o.positionCS = TransformWorldToHClip(posWS);
                 o.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
                 o.nWS = TransformObjectToWorldNormal(IN.normalOS);
