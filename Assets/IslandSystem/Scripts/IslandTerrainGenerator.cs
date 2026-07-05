@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace IslandSystem
@@ -842,34 +845,18 @@ namespace IslandSystem
             }
             if (radiusCache.Count == 0) return;
 
-            // Global no-overlap acceleration grid: a tree is rejected if it lands within (rA+rB)*pack of an
-            // already-placed tree, ACROSS all rules/species — so nothing spawns inside another tree. The cell
-            // must span the largest possible interaction (footprint OR density spacing) for the 3×3 search.
+            // Global no-overlap grid cell: span the largest possible interaction (footprint OR density spacing).
             float cell = Mathf.Max(1f, Mathf.Max(maxR * maxScale, maxSep * 0.5f) * 2f);
             const float pack = 0.9f;
-            var occ = new Dictionary<long, List<Vector3>>();    // cell -> list of (worldX, worldZ, radius)
-            long Key(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
-            bool TooClose(float wx, float wz, float r)
-            {
-                int cx = Mathf.FloorToInt(wx / cell), cz = Mathf.FloorToInt(wz / cell);
-                for (int dx = -1; dx <= 1; dx++)
-                    for (int dz = -1; dz <= 1; dz++)
-                        if (occ.TryGetValue(Key(cx + dx, cz + dz), out var list))
-                            foreach (var t in list)
-                            {
-                                float md = (r + t.z) * pack;
-                                float ex = t.x - wx, ez = t.y - wz;
-                                if (ex * ex + ez * ez < md * md) return true;
-                            }
-                return false;
-            }
-            void Register(float wx, float wz, float r)
-            {
-                long k = Key(Mathf.FloorToInt(wx / cell), Mathf.FloorToInt(wz / cell));
-                if (!occ.TryGetValue(k, out var list)) { list = new List<Vector3>(); occ[k] = list; }
-                list.Add(new Vector3(wx, wz, r));
-            }
 
+            // Flatten every tree rule (across all bands) into blittable arrays for the Burst job. Nulls are
+            // dropped and each rule's weights stay aligned to its kept prefabs; the managed prefab list mirrors
+            // prefabRadius so a job's prefab index reads back to a GameObject.
+            var allPrefabs = new List<GameObject>();
+            var prefabRadiusList = new List<float>();
+            var weightList = new List<float>();
+            var ruleList = new List<ScatterRuleB>();
+            long occCapacity = 0;
             int bi = 0;
             foreach (var band in bands)
             {
@@ -881,60 +868,84 @@ namespace IslandSystem
                     ruleIndex++;
                     if (rule == null || rule.prefabs == null || rule.prefabs.Length == 0) continue;
 
-                    // DENSITY-based placement via POISSON-DISC dart throwing: trees per 100 m² -> a target
-                    // spacing of ≈10/sqrt(density) m. Instead of a jittered grid (which still reads as rows),
-                    // we throw random darts and accept one only if it clears every neighbour by a PER-TREE
-                    // random distance — so gaps vary and trees form natural clumps/clearings, never a grid.
+                    int start = allPrefabs.Count, wStart = weightList.Count, kept = 0;
+                    for (int pi = 0; pi < rule.prefabs.Length; pi++)
+                    {
+                        var p = rule.prefabs[pi];
+                        if (p == null || !radiusCache.TryGetValue(p, out float pr)) continue;
+                        allPrefabs.Add(p);
+                        prefabRadiusList.Add(pr);
+                        weightList.Add(rule.prefabWeights != null && pi < rule.prefabWeights.Length ? rule.prefabWeights[pi] : 1f);
+                        kept++;
+                    }
+                    if (kept == 0) continue;
+
                     float density = rule.density > 0f ? rule.density : 2f;
                     float spacing = 10f / Mathf.Sqrt(density);
-                    float variation = Mathf.Clamp01(rule.spacingVariation);
-                    // Enough darts to fill the area to capacity (rejection handles the rest).
-                    int target = Mathf.CeilToInt(data.size.x * data.size.z / (spacing * spacing));
-                    int attempts = Mathf.Clamp(target * 5, 64, 4_000_000);
-                    var rng = new System.Random((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663);
+                    occCapacity += Mathf.CeilToInt(data.size.x * data.size.z / (spacing * spacing));
 
-                    for (int a = 0; a < attempts; a++)
+                    ruleList.Add(new ScatterRuleB
                     {
-                        float u = (float)rng.NextDouble();
-                        float v = (float)rng.NextDouble();
-                        if (InAnyVillage(u, v, data.size, villages)) continue;
-                        float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                        if (height01 < FadeThreshold || height01 < band.lo || height01 > band.hi) continue;
-                        float slopeDeg = data.GetSteepness(u, v);
-                        // Soft edge: thin out toward the condition's limits instead of a hard cut.
-                        if ((float)rng.NextDouble() > ConditionWeight(rule.where, height01, slopeDeg)) continue;
-
-                        // This dart's OWN spacing (varies ±50%·variation) → uneven gaps. The open-slot test is
-                        // SPECIES-INDEPENDENT, so which tree we place doesn't bias where trees land (previously
-                        // big-footprint species were rejected more, making the small ones look "prioritized").
-                        float wx = u * data.size.x, wz = v * data.size.z;
-                        float sep = spacing * Mathf.Lerp(1f - 0.5f * variation, 1f + 0.5f * variation, (float)rng.NextDouble());
-                        if (TooClose(wx, wz, sep * 0.5f)) continue;
-
-                        // Slot is open — NOW pick the species by weight (mix honoured exactly) + its size.
-                        int idx = PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
-                        var prefab = rule.prefabs[idx];
-                        if (prefab == null || !radiusCache.TryGetValue(prefab, out float pr)) continue;
-                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        if (s <= 0f) s = 1f;
-
-                        // Claim max(spacing, footprint) so neighbours keep the gap AND never physically overlap.
-                        Register(wx, wz, Mathf.Max(sep * 0.5f, pr * s));
-
-                        // Record the instance for GPU-instanced drawing (scale folds in the prefab root scale,
-                        // exactly like setting go.localScale = prefabRootScale * s on an instantiated object).
-                        Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(u, v) - rule.sink, wz);
-                        Quaternion rot = rule.alignToNormal
-                            ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v))
-                            : Quaternion.identity;
-                        if (rule.randomYRotation)
-                            rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                        treeRenderer.Add(prefab, worldPos, rot, prefab.transform.localScale * s);
-                    }
+                        where = rule.where,
+                        bandLo = band.lo, bandHi = band.hi,
+                        density = density, spacingVariation = rule.spacingVariation,
+                        scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                        sink = rule.sink,
+                        alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
+                        randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
+                        nonUniformScale = 0,
+                        prefabStart = start, prefabCount = kept,
+                        weightStart = wStart, weightCount = kept,
+                        seed = (uint)((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663)
+                    });
                 }
             }
+            if (ruleList.Count == 0) return;
+
+            // DOTS: run the Poisson dart-throwing in a Burst job over a native copy of the heightmap, then read
+            // the placements back on the main thread and register them for GPU-instanced drawing.
+            var hf = HeightField.FromTerrain(terrain, Allocator.TempJob);
+            var villageArr = BuildVillageArray(villages, Allocator.TempJob);
+            var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
+            var weightsArr = new NativeArray<float>(weightList.ToArray(), Allocator.TempJob);
+            var radiusArr = new NativeArray<float>(prefabRadiusList.ToArray(), Allocator.TempJob);
+            int cap = (int)Mathf.Clamp(occCapacity + 64, 64, 8_000_000);
+            var occ = new NativeParallelMultiHashMap<int2, float3>(cap, Allocator.TempJob);
+            var outList = new NativeList<ScatterInstance>(cap, Allocator.TempJob);
+
+            new TreeScatterJob
+            {
+                hf = hf, rules = rulesArr, weights = weightsArr, prefabRadius = radiusArr,
+                villages = villageArr, cell = cell, pack = pack, occ = occ, outList = outList
+            }.Schedule().Complete();
+
+            for (int i = 0; i < outList.Length; i++)
+            {
+                var inst = outList[i];
+                var prefab = allPrefabs[inst.prefab];
+                if (prefab == null) continue;
+                treeRenderer.Add(prefab, (Vector3)inst.pos,
+                    new Quaternion(inst.rot.value.x, inst.rot.value.y, inst.rot.value.z, inst.rot.value.w),
+                    prefab.transform.localScale * inst.scale.x);
+            }
+
+            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose();
+            weightsArr.Dispose(); radiusArr.Dispose(); occ.Dispose(); outList.Dispose();
 
             treeRenderer.Finish();
+        }
+
+        /// <summary>Packs the serialized village zones into a job-friendly array: xy = centre UV, z = radius (world).</summary>
+        public static NativeArray<float3> BuildVillageArray(List<VillageZone> villages, Allocator alloc)
+        {
+            int n = villages != null ? villages.Count : 0;
+            var arr = new NativeArray<float3>(n, alloc, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < n; i++)
+            {
+                var z = villages[i];
+                arr[i] = new float3(z.centerUV.x, z.centerUV.y, z.radiusWorld);
+            }
+            return arr;
         }
 
 
@@ -976,15 +987,53 @@ namespace IslandSystem
         /// </summary>
         static void ScatterRuleList(Terrain terrain, List<ObjectSpawnRule> rules, int seed, float bandLo, float bandHi, string holderName, List<VillageZone> villages)
         {
+            if (rules == null) return;
             var data = terrain.terrainData;
-            Vector3 origin = terrain.transform.position;
 
-            Transform holder = null;
-            int ruleIndex = 0;
+            // Flatten the valid rules into blittable arrays for the Burst job (nulls dropped). The managed prefab
+            // list mirrors the job's prefab index so a placement reads back to a prefab to instantiate.
+            var allPrefabs = new List<GameObject>();
+            var ruleList = new List<ScatterRuleB>();
+            int cap = 0, ruleIndex = 0;
             foreach (var rule in rules)
             {
                 ruleIndex++;
                 if (rule == null || !rule.IsValid) continue;
+                int start = allPrefabs.Count, kept = 0;
+                foreach (var p in rule.prefabs) { if (p == null) continue; allPrefabs.Add(p); kept++; }
+                if (kept == 0) continue;
+                cap += Mathf.Max(0, rule.count);
+                ruleList.Add(new ScatterRuleB
+                {
+                    where = rule.where, bandLo = bandLo, bandHi = bandHi,
+                    count = rule.count,
+                    scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                    sink = rule.sink,
+                    alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
+                    randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
+                    nonUniformScale = (byte)(rule.nonUniformScale ? 1 : 0),
+                    prefabStart = start, prefabCount = kept,
+                    weightStart = 0, weightCount = 0,
+                    seed = (uint)(seed * 73856093 ^ ruleIndex * 19349663)
+                });
+            }
+            if (ruleList.Count == 0) return;
+
+            var hf = HeightField.FromTerrain(terrain, Allocator.TempJob);
+            var villageArr = BuildVillageArray(villages, Allocator.TempJob);
+            var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
+            var outList = new NativeList<ScatterInstance>(Mathf.Max(16, cap), Allocator.TempJob);
+
+            new RockScatterJob { hf = hf, rules = rulesArr, villages = villageArr, outList = outList }
+                .Schedule().Complete();
+
+            // Instantiate the placements as GameObjects (colliders + SpawnCuller) on the main thread.
+            Transform holder = null;
+            for (int i = 0; i < outList.Length; i++)
+            {
+                var inst = outList[i];
+                var prefab = allPrefabs[inst.prefab];
+                if (prefab == null) continue;
 
                 if (holder == null)
                 {
@@ -1000,59 +1049,20 @@ namespace IslandSystem
                         holder.gameObject.AddComponent<SpawnCuller>().cullDistance = 220f;
                 }
 
-                var rng = new System.Random(seed * 73856093 ^ ruleIndex * 19349663);
-                int placed = 0, guard = rule.count * 12;
-                while (placed < rule.count && guard-- > 0)
-                {
-                    float u = (float)rng.NextDouble();
-                    float v = (float)rng.NextDouble();
-                    if (InAnyVillage(u, v, data.size, villages)) continue;
-
-                    float height01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, data.size.y);
-                    if (height01 < FadeThreshold || height01 < bandLo || height01 > bandHi) continue;
-                    float slopeDeg = data.GetSteepness(u, v);
-                    if (ConditionWeight(rule.where, height01, slopeDeg) <= 0.001f) continue;
-
-                    var prefab = rule.prefabs[rng.Next(rule.prefabs.Length)];
-                    if (prefab == null) continue;
-
-                    Vector3 worldPos = origin + new Vector3(
-                        u * data.size.x,
-                        data.GetInterpolatedHeight(u, v) - rule.sink,
-                        v * data.size.z);
-
-                    GameObject go;
+                Vector3 worldPos = (Vector3)inst.pos;
+                GameObject go;
 #if UNITY_EDITOR
-                    go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab, holder);
-                    go.transform.position = worldPos;
+                go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab, holder);
+                go.transform.position = worldPos;
 #else
-                    go = Object.Instantiate(prefab, worldPos, Quaternion.identity, holder);
+                go = Object.Instantiate(prefab, worldPos, Quaternion.identity, holder);
 #endif
-                    Quaternion rot = Quaternion.identity;
-                    if (rule.alignToNormal)
-                        rot = Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(u, v));
-                    if (rule.randomYRotation)
-                        rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                    go.transform.rotation = rot;
-
-                    Vector3 baseScale = go.transform.localScale;
-                    if (rule.nonUniformScale)
-                    {
-                        // Independent X/Y/Z scale so rocks look uneven.
-                        float sx = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        float sy = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        float sz = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        go.transform.localScale = Vector3.Scale(baseScale, new Vector3(sx, sy, sz));
-                    }
-                    else
-                    {
-                        float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                        if (s > 0f) go.transform.localScale = baseScale * s;
-                    }
-
-                    placed++;
-                }
+                go.transform.rotation = new Quaternion(inst.rot.value.x, inst.rot.value.y, inst.rot.value.z, inst.rot.value.w);
+                // scale = per-axis multiplier from the job (uniform => equal components) folded onto the prefab scale.
+                go.transform.localScale = Vector3.Scale(go.transform.localScale, (Vector3)inst.scale);
             }
+
+            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose(); outList.Dispose();
         }
 
         // ---- Villages -----------------------------------------------------

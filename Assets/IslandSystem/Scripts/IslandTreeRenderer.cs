@@ -37,9 +37,9 @@ namespace IslandSystem
         [Tooltip("Full detail within this distance.")]
         public float lodNear = 160f;
         [Tooltip("At this distance only lodMinKeep of the trees remain.")]
-        public float lodFar = 900f;
-        [Tooltip("Fraction of trees kept at/after lodFar (0.35 = 35%).")]
-        [Range(0.05f, 1f)] public float lodMinKeep = 0.35f;
+        public float lodFar = 600f;
+        [Tooltip("Fraction of trees kept at/after lodFar (0.2 = 20%).")]
+        [Range(0.05f, 1f)] public float lodMinKeep = 0.2f;
 
         // Runtime draw data (rebuilt from the serialized species; not serialized itself).
         struct Batch

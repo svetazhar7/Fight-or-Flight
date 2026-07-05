@@ -168,28 +168,19 @@ Shader "IslandSystem/Foliage"
                 half3 nTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.uv), _BumpScale);
                 nWS = normalize(nTS.x * tWS + nTS.y * bWS + nTS.z * nWS);
 
-                InputData id = (InputData)0;
-                id.positionWS = i.posWS;
-                id.normalWS = nWS;
-                id.viewDirectionWS = SafeNormalize(GetCameraPositionWS() - i.posWS);
-                id.shadowCoord = i.shadowCoord;
-                id.fogCoord = i.fogFactorAndVertexLight.x;
-                id.vertexLighting = i.fogFactorAndVertexLight.yzw;
-                id.bakedGI = SampleSH(nWS);
-                id.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(i.positionCS);
-                id.shadowMask = unity_ProbesOcclusion;
+                // STYLIZED lighting matched to the grass (IslandGrass): a soft half-lambert keeps shaded petals
+                // lit instead of near-black (hard PBR made flowers read dark next to the wrap-lit grass), plus SH
+                // ambient; shadows only darken to 0.35 like the terrain. Flat toon look, consistent with the grass.
+                Light L = GetMainLight(i.shadowCoord);
+                float ndl = saturate(dot(nWS, L.direction)) * 0.5 + 0.5;   // half-lambert 0.5..1
+                float3 sun = L.color.rgb * lerp(0.35, 1.0, ndl);
+                float3 ambient = SampleSH(nWS) + 0.28;                    // small lift so shaded petals aren't muddy
+                float3 lighting = min(sun + ambient, 1.25);
+                lighting *= lerp(0.35, 1.0, L.shadowAttenuation);          // shadowed side dims but never to black
 
-                SurfaceData sd = (SurfaceData)0;
-                sd.albedo = tex.rgb;
-                sd.alpha = 1.0;
-                sd.metallic = 0.0;
-                sd.smoothness = _Smoothness;
-                sd.occlusion = 1.0;
-                sd.normalTS = nTS;
-
-                half4 col = UniversalFragmentPBR(id, sd);
-                col.rgb = MixFog(col.rgb, id.fogCoord);
-                return half4(col.rgb, 1.0);
+                float3 col = tex.rgb * lighting;
+                col = MixFog(col, i.fogFactorAndVertexLight.x);
+                return half4(col, 1.0);
             }
             ENDHLSL
         }

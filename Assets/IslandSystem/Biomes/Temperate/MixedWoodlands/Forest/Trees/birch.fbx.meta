@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 38131452f7b427744ad6054a7344a265
+guid: 1e6569a851f65804dbcd52c4d7e191f3
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
@@ -7,8 +7,13 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: Material.002
-    second: {fileID: 2100000, guid: 2ebdd5d7c827f364cbee14d18799c99e, type: 2}
+      name: BirchTree_Bark
+    second: {fileID: 2100000, guid: 8d1b4716a7ed2b340854197a3fc25952, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: BirchTree_Leaves
+    second: {fileID: 2100000, guid: 93cc730dcd664ac4f9ca2d9322690fed, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0
@@ -38,7 +43,7 @@ ModelImporter:
     isReadable: 0
   meshes:
     lODScreenPercentages: []
-    globalScale: 1
+    globalScale: 2
     meshCompression: 0
     addColliders: 0
     useSRGBMaterialColor: 1
@@ -96,7 +101,7 @@ ModelImporter:
     armStretch: 0.05
     legStretch: 0.05
     feetSpacing: 0
-    globalScale: 1
+    globalScale: 2
     rootMotionBoneName: 
     hasTranslationDoF: 0
     hasExtraRoot: 0

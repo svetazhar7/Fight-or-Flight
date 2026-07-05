@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -29,8 +32,9 @@ namespace IslandSystem
         [Tooltip("Max chunks built per update, so streaming in doesn't hitch.")]
         public int buildsPerTick = 3;
 
-        [Tooltip("Flowers cast shadows. Off is cheaper if the field is dense.")]
-        public bool castShadows = true;
+        [Tooltip("Flowers cast shadows. Off is cheaper if the field is dense — flower shadows are barely visible " +
+                 "but push the whole foliage geometry through the shadow pass, so this defaults OFF.")]
+        public bool castShadows = false;
 
         /// <summary>Same low-altitude gate the generation-time scatters use (no flowers on the sea fade).</summary>
         const float FadeThreshold = 0.05f;
@@ -57,6 +61,10 @@ namespace IslandSystem
         static readonly Plane[] _planes = new Plane[6];
         IslandMarker _marker;
         int _builtThisTick;
+
+        // Native copy of this island's heightmap, sampled by the Burst FlowerScatterJob instead of managed
+        // TerrainData calls. Built once (lazily), disposed on OnDisable.
+        HeightField _hf;
 
         IslandMarker Marker => _marker != null ? _marker : (_marker = GetComponent<IslandMarker>());
 
@@ -86,6 +94,7 @@ namespace IslandSystem
             UnityEditor.EditorApplication.update -= EditorTick;
 #endif
             ClearAll();
+            if (_hf.IsCreated) _hf.Dispose();
         }
 
         void ClearAll() => _chunks.Clear();   // instanced draw data only — no GameObjects to destroy
@@ -261,95 +270,110 @@ namespace IslandSystem
             float uMin, float uMax, float vMin, float vMax)
         {
             var marker = Marker;
-            var data = terrain.terrainData;
-            // Accumulate world matrices per (mesh, submesh, material) so each becomes ONE instanced draw.
-            var acc = new Dictionary<(Mesh, int, Material), List<Matrix4x4>>();
-            var bounds = new Bounds();
-            bool anyBounds = false;
+            if (terrain == null) return null;
 
+            // Native heightmap copy, built once (rebuilt if the terrain resolution changes under us).
+            if (_hf.IsCreated && _hf.res != terrain.terrainData.heightmapResolution) _hf.Dispose();
+            if (!_hf.IsCreated) _hf = HeightField.FromTerrain(terrain, Allocator.Persistent);
+
+            // Flatten this island's flower rules + prefabs/weights, baking the per-chunk RNG seed into each rule.
+            var allPrefabs = new List<GameObject>();
+            var weightList = new List<float>();
+            var ruleList = new List<ScatterRuleB>();
             int bi = 0;
             foreach (var band in marker.bands)
             {
                 bi++;
                 var biome = band.biome;
                 if (biome == null || biome.flowerRules == null) continue;
-
                 int ruleIndex = 0;
                 foreach (var rule in biome.flowerRules)
                 {
                     ruleIndex++;
                     if (rule == null || !rule.IsValid || rule.prefabs == null || rule.prefabs.Length == 0) continue;
 
-                    float density = rule.density > 0f ? rule.density : 1f;
-                    float spacing = 10f / Mathf.Sqrt(density);
-                    int gx = Mathf.Max(1, Mathf.CeilToInt((uMax - uMin) * size.x / spacing));
-                    int gz = Mathf.Max(1, Mathf.CeilToInt((vMax - vMin) * size.z / spacing));
-                    var rng = new System.Random((cseed + bi * 131) * 48271 ^ ruleIndex * 28657);
-                    const float jitter = 0.8f;
-
-                    for (int iz = 0; iz < gz; iz++)
+                    int start = allPrefabs.Count, wStart = weightList.Count, kept = 0;
+                    for (int pi = 0; pi < rule.prefabs.Length; pi++)
                     {
-                        for (int ix = 0; ix < gx; ix++)
-                        {
-                            float u = Mathf.Clamp01(Mathf.Lerp(uMin, uMax, (ix + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gx));
-                            float v = Mathf.Clamp01(Mathf.Lerp(vMin, vMax, (iz + 0.5f + ((float)rng.NextDouble() - 0.5f) * jitter) / gz));
-                            if (IslandTerrainGenerator.InAnyVillage(u, v, size, marker.villages)) continue;
-                            float h01 = data.GetInterpolatedHeight(u, v) / Mathf.Max(0.0001f, size.y);
-                            if (h01 < FadeThreshold || h01 < band.lo || h01 > band.hi) continue;
-                            float slope = data.GetSteepness(u, v);
-                            if ((float)rng.NextDouble() > IslandTerrainGenerator.ConditionWeight(rule.where, h01, slope)) continue;
-
-                            // One CLUSTER: first flower at the centre, the rest uniform in the disc.
-                            int count = rng.Next(rule.clusterSize.x, rule.clusterSize.y + 1);
-                            float ccx = u * size.x, ccz = v * size.z;
-                            for (int i = 0; i < count; i++)
-                            {
-                                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-                                float rad = i == 0 ? 0f : rule.clusterRadius * Mathf.Sqrt((float)rng.NextDouble());
-                                float wx = ccx + Mathf.Cos(ang) * rad;
-                                float wz = ccz + Mathf.Sin(ang) * rad;
-                                float fu = Mathf.Clamp01(wx / size.x), fv = Mathf.Clamp01(wz / size.z);
-                                float fh01 = data.GetInterpolatedHeight(fu, fv) / Mathf.Max(0.0001f, size.y);
-                                if (fh01 < FadeThreshold || fh01 < band.lo || fh01 > band.hi) continue;
-                                if (IslandTerrainGenerator.InAnyVillage(fu, fv, size, marker.villages)) continue;
-
-                                int idx = IslandTerrainGenerator.PickWeighted(rule.prefabWeights, rule.prefabs.Length, rng);
-                                var prefab = rule.prefabs[idx];
-                                if (prefab == null) continue;
-                                float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
-                                if (s <= 0f) s = 1f;
-
-                                Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(fu, fv) - rule.sink, wz);
-                                Quaternion rot = rule.alignToNormal
-                                    ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(fu, fv))
-                                    : Quaternion.identity;
-                                if (rule.randomYRotation)
-                                    rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-
-                                // Instance matrix per renderable part (folds the prefab-root scale × user scale).
-                                Vector3 scaleVec = prefab.transform.localScale * s;
-                                Matrix4x4 world = Matrix4x4.TRS(worldPos, rot, scaleVec);
-                                foreach (var part in GetParts(prefab))
-                                {
-                                    var key = (part.mesh, part.submesh, part.material);
-                                    if (!acc.TryGetValue(key, out var mats)) { mats = new List<Matrix4x4>(); acc[key] = mats; }
-                                    mats.Add(world * part.local);
-                                }
-                                if (!anyBounds) { bounds = new Bounds(worldPos, Vector3.zero); anyBounds = true; }
-                                else bounds.Encapsulate(worldPos);
-                            }
-                        }
+                        var p = rule.prefabs[pi];
+                        if (p == null) continue;
+                        allPrefabs.Add(p);
+                        weightList.Add(rule.prefabWeights != null && pi < rule.prefabWeights.Length ? rule.prefabWeights[pi] : 1f);
+                        kept++;
                     }
+                    if (kept == 0) continue;
+
+                    ruleList.Add(new ScatterRuleB
+                    {
+                        where = rule.where,
+                        bandLo = band.lo, bandHi = band.hi,
+                        density = rule.density > 0f ? rule.density : 1f,
+                        spacingVariation = 0f,
+                        scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                        sink = rule.sink,
+                        alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
+                        randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
+                        nonUniformScale = 0,
+                        prefabStart = start, prefabCount = kept,
+                        weightStart = wStart, weightCount = kept,
+                        clusterSize = new int2(rule.clusterSize.x, rule.clusterSize.y),
+                        clusterRadius = rule.clusterRadius,
+                        seed = (uint)((cseed + bi * 131) * 48271 ^ ruleIndex * 28657)
+                    });
+                }
+            }
+            if (ruleList.Count == 0) return null;
+
+            // DOTS: place the chunk's flower clusters in a Burst job over the native heightmap.
+            var villageArr = IslandTerrainGenerator.BuildVillageArray(marker.villages, Allocator.TempJob);
+            var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
+            var weightsArr = new NativeArray<float>(weightList.ToArray(), Allocator.TempJob);
+            var outList = new NativeList<ScatterInstance>(256, Allocator.TempJob);
+
+            new FlowerScatterJob
+            {
+                hf = _hf, rules = rulesArr, weights = weightsArr, villages = villageArr,
+                uMin = uMin, uMax = uMax, vMin = vMin, vMax = vMax, outList = outList
+            }.Schedule().Complete();
+
+            // Read the placements back and accumulate world matrices per (mesh, submesh, material) → one draw each.
+            FlowerChunk chunk = null;
+            if (outList.Length > 0)
+            {
+                var acc = new Dictionary<(Mesh, int, Material), List<Matrix4x4>>();
+                var bounds = new Bounds();
+                bool anyBounds = false;
+                for (int i = 0; i < outList.Length; i++)
+                {
+                    var inst = outList[i];
+                    var prefab = allPrefabs[inst.prefab];
+                    if (prefab == null) continue;
+                    Vector3 worldPos = (Vector3)inst.pos;
+                    Quaternion rot = new Quaternion(inst.rot.value.x, inst.rot.value.y, inst.rot.value.z, inst.rot.value.w);
+                    Vector3 scaleVec = Vector3.Scale(prefab.transform.localScale, (Vector3)inst.scale);
+                    Matrix4x4 world = Matrix4x4.TRS(worldPos, rot, scaleVec);
+                    foreach (var part in GetParts(prefab))
+                    {
+                        var key = (part.mesh, part.submesh, part.material);
+                        if (!acc.TryGetValue(key, out var mats)) { mats = new List<Matrix4x4>(); acc[key] = mats; }
+                        mats.Add(world * part.local);
+                    }
+                    if (!anyBounds) { bounds = new Bounds(worldPos, Vector3.zero); anyBounds = true; }
+                    else bounds.Encapsulate(worldPos);
+                }
+                if (acc.Count > 0)
+                {
+                    bounds.Expand(6f);   // pad for plant height + wind sway so the whole-chunk cull isn't too tight
+                    var batches = new Batch[acc.Count];
+                    int bIdx = 0;
+                    foreach (var kv in acc)
+                        batches[bIdx++] = new Batch { mesh = kv.Key.Item1, submesh = kv.Key.Item2, material = kv.Key.Item3, matrices = kv.Value.ToArray(), bounds = bounds };
+                    chunk = new FlowerChunk { batches = batches };
                 }
             }
 
-            if (acc.Count == 0) return null;
-            bounds.Expand(6f);   // pad for the plant height + wind sway so the whole-chunk cull isn't too tight
-            var batches = new Batch[acc.Count];
-            int bIdx = 0;
-            foreach (var kv in acc)
-                batches[bIdx++] = new Batch { mesh = kv.Key.Item1, submesh = kv.Key.Item2, material = kv.Key.Item3, matrices = kv.Value.ToArray(), bounds = bounds };
-            return new FlowerChunk { batches = batches };
+            villageArr.Dispose(); rulesArr.Dispose(); weightsArr.Dispose(); outList.Dispose();
+            return chunk;
         }
 
         static long Key(int cx, int cz) => ((long)(cx + 100000) << 21) ^ (uint)(cz + 100000);
