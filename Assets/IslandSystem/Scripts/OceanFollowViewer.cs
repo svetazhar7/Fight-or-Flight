@@ -23,8 +23,9 @@ namespace IslandSystem
             float sx = Mathf.Round((v.x - parentPos.x) / snap) * snap;
             float sz = Mathf.Round((v.z - parentPos.z) / snap) * snap;
             var lp = transform.localPosition;
-            if (!Mathf.Approximately(lp.x, sx) || !Mathf.Approximately(lp.z, sz) || lp.y != 0f)
-                transform.localPosition = new Vector3(sx, 0f, sz);
+            // Keep the ring's local Y OFFSET (LOD rings stack in Y); only the XZ follows the viewer.
+            if (!Mathf.Approximately(lp.x, sx) || !Mathf.Approximately(lp.z, sz))
+                transform.localPosition = new Vector3(sx, lp.y, sz);
 #if UNITY_EDITOR
             if (!Application.isPlaying) UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
 #endif

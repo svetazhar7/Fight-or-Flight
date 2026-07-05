@@ -162,7 +162,7 @@ Shader "IslandSystem/Grass"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; float3 ambient : TEXCOORD5; float dry : TEXCOORD6; };
 
             Varyings vert (Attributes IN)
             {
@@ -175,6 +175,13 @@ Shader "IslandSystem/Grass"
                 o.nWS = nWS;
                 o.wpos = posWS;
                 o.fog = ComputeFogFactor(o.positionCS.z);
+
+                // Moved out of the fragment (big per-pixel savings over full-screen grass): the SH ambient and
+                // the large-scale colour-variation noise (patchNoise = domain warp + 3 octaves) are smooth over
+                // a blade, so per-VERTEX + interpolation is visually identical and far cheaper.
+                o.ambient = SampleSH(nWS) + _AmbientBoost.xxx;
+                o.dry = (_ColorVariation > 0.001)
+                    ? smoothstep(0.28, 0.72, patchNoise(posWS.xz * _VariationScale)) * _ColorVariation : 0.0;
                 return o;
             }
 
@@ -189,25 +196,15 @@ Shader "IslandSystem/Grass"
                 // Soft half-lambert (0.35..1) so shaded sides stay lit but the lit side doesn't over-brighten.
                 float ndl = saturate(dot(n, L.direction)) * 0.5 + 0.5;
                 float3 sun = L.color.rgb * lerp(0.35, 1.0, ndl);
-                float3 ambient = SampleSH(n) + _AmbientBoost.xxx;
-                // Clamp the combined light so pale textures don't blow out to white in bright scenes,
-                // THEN apply shadows to the WHOLE sum (not just the sun term): the ambient/SH floor was
-                // keeping shadowed grass almost fully bright, so cloud/hill shadows didn't read on it.
-                float3 lighting = min(sun + ambient, 1.25);
+                // Clamp the combined light so pale textures don't blow out to white in bright scenes, THEN apply
+                // shadows to the WHOLE sum (ambient is the per-vertex SH+boost computed in the vertex stage).
+                float3 lighting = min(sun + i.ambient, 1.25);
                 lighting *= lerp(0.35, 1.0, L.shadowAttenuation);   // match how dark the shadowed terrain gets
 
-                // Cyanilux-style root→tip gradient (white/white = plain texture colour, e.g. for moss),
-                // with large-scale WORLD-noise variation: patches drift toward the DRY colours (yellowed)
-                // and back to the lush base — continuous across chunks and biome borders.
-                float3 bottom = _BottomColor.rgb, top = _TopColor.rgb;
-                if (_ColorVariation > 0.001)
-                {
-                    float nse = patchNoise(i.wpos.xz * _VariationScale);
-                    float dry = smoothstep(0.28, 0.72, nse) * _ColorVariation;
-                    bottom = lerp(bottom, _DryBottomColor.rgb, dry);
-                    top    = lerp(top,    _DryTopColor.rgb,    dry);
-                }
-                float3 tint = lerp(bottom, top, saturate(i.grad));
+                // Root→tip gradient with the (per-vertex) dry-patch factor already computed — just cheap lerps.
+                float3 bottom = lerp(_BottomColor.rgb, _DryBottomColor.rgb, i.dry);
+                float3 top    = lerp(_TopColor.rgb,    _DryTopColor.rgb,    i.dry);
+                float3 tint   = lerp(bottom, top, saturate(i.grad));
 
                 float3 col = tex.rgb * tint * lighting;
                 col = MixFog(col, i.fog);

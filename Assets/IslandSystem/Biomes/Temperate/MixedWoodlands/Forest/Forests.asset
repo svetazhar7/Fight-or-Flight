@@ -18,7 +18,7 @@ MonoBehaviour:
   displayName: "\u041B\u0435\u0441\u0430"
   elevationOrder: 0.3
   reliefStrength: 0.1
-  debugColor: {r: 0.25, g: 0.45, b: 0.28, a: 1}
+  debugColor: {r: 0.6392157, g: 0.76470596, b: 0.24313727, a: 1}
   noiseSettings:
     frequency: 3
     amplitude: 1
@@ -92,7 +92,7 @@ MonoBehaviour:
   flowerRules:
   - label: pink flowers
     prefabs:
-    - {fileID: 919132149155446097, guid: b2490b8c2ee050b4a8d6323eee80a63d, type: 3}
+    - {fileID: 919132149155446097, guid: 176f4bb9d9ea71c4fb1b6b964142a539, type: 3}
     prefabWeights:
     - 1
     count: 2
@@ -208,12 +208,12 @@ MonoBehaviour:
     prefabScaleRange: {x: 1.5, y: 1.5}
     layFlat: 0
     alphaCutoff: 0.5
-    bottomColor: {r: 0.467253, g: 0.8490566, b: 0.40392157, a: 1}
-    topColor: {r: 0.53922987, g: 0.8867924, b: 0.27189392, a: 1}
+    bottomColor: {r: 0.34154677, g: 0.5754717, b: 0.16015486, a: 1}
+    topColor: {r: 0.43432876, g: 0.6132076, b: 0.17644179, a: 1}
     textureTiles: 2
-    colorVariation: 0
-    dryBottomColor: {r: 0.45882356, g: 0.5921569, b: 0.227451, a: 1}
-    dryTopColor: {r: 0.5686275, g: 0.68235296, b: 0.3019608, a: 1}
+    colorVariation: 0.5
+    dryBottomColor: {r: 0.52156866, g: 0.654902, b: 0.16862746, a: 1}
+    dryTopColor: {r: 0.3764706, g: 0.6039216, b: 0.12941177, a: 1}
     variationScale: 0.7
     windStrength: 0.13
     bendStrength: 1

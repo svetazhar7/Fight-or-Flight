@@ -220,6 +220,17 @@ namespace IslandSystem
             terrain.allowAutoConnect = false; // islands are independent; avoids "different heightmap resolution" spam
             if (terrainMat != null) terrain.materialTemplate = terrainMat;
 
+            // ---- terrain rendering optimization ----
+            // Unity Terrain is already internally chunked (a quadtree of patches with continuous LOD); we tune
+            // that built-in system rather than split islands into separate Terrains (which would add seams +
+            // draw calls). GPU-instance the patches, drop the terrain's own tree/detail pass (we use our own
+            // instanced trees/grass), and let TerrainLOD ramp pixelError + basemap by distance to the viewer.
+            terrain.drawInstanced = true;                 // one instanced draw for the patch grid
+            terrain.drawTreesAndFoliage = false;          // no Unity terrain trees/details in this project
+            terrain.heightmapPixelError = 5f;             // base (near) LOD; TerrainLOD raises it with distance
+            terrain.basemapDistance = 5000f;              // placeholder — TerrainLOD sets a whole-island value
+            go.AddComponent<TerrainLOD>();                // per-island geometry LOD + whole-island basemap
+
             IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, villages);
             IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // trees: ALWAYS loaded (off villages)
             IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, villages); // rock GameObjects (off villages)
@@ -375,13 +386,6 @@ namespace IslandSystem
             }
         }
 
-        /// <summary>Water tile size (m) — matches Poseidon's Tileable demo (fine 1 m verts for real waves).</summary>
-        const float WaterTileSize = 100f;
-        /// <summary>Vertices per tile side (Poseidon demo uses 100 → ~1 m facets).</summary>
-        const int WaterTileRes = 100;
-        /// <summary>Detailed tiles per side of the viewer-following block (6 × 100 m = 600 m of detailed sea).</summary>
-        const int WaterTileCount = 6;
-
         void CreateOcean(Transform root, float size)
         {
             // NATIVE Poseidon 2 water, built like the "Demo_LowPolyWater_Tileable" reference:
@@ -406,39 +410,28 @@ namespace IslandSystem
                 return;
             }
 
-            var tideDesc = new Pinwheel.Poseidon.TileMeshDesc
-            { size = WaterTileSize, resolution = WaterTileRes, needNormals = false, needTangents = false };
+            // -- OCEAN LOD: two viewer-following rings + a horizon sheet -------------------------------
+            // The old detail block was 6×6 uniform res-100 tiles (~2.2M verts) everywhere near the viewer.
+            // Now the tessellation drops with distance: a small FINE ring right around the player, a big COARSE
+            // ring around that, then the flat horizon. To avoid T-junction cracks where two resolutions meet
+            // (the world-space waves would tear a straight coarse edge), the rings OVERLAP and are stacked in Y —
+            // the finer ring sits slightly higher and simply draws on top of the coarser one it covers.
+            //   LOD0 fine:  4×4 × 120m = 480m, res 90, y  0.00
+            //   LOD1 coarse: 5×5 × 480m = 2400m, res 40, y -0.20 (continuous sheet UNDER LOD0, no gap)
+            //   Horizon:    fieldSize×2.4, res 40, y -0.35
 
-            // -- detailed, viewer-following block ------------------------------------------------------
-            var detail = new GameObject("Water Detail");
-            detail.transform.SetParent(ocean.transform, false);
-            var tw = detail.AddComponent<Pinwheel.Poseidon.TileableWater>();
-            tw.material = waterMaterial;
-            tw.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;   // the classic Poseidon low-poly look
-            tw.tileMeshDesc = tideDesc;
-            int half = WaterTileCount / 2;
-            for (int tz = -half; tz < WaterTileCount - half; tz++)
-                for (int tx = -half; tx < WaterTileCount - half; tx++)
-                    tw.GetOrAddTile(tx, tz);
-            tw.GenerateMesh();
+            var lod0 = BuildWaterRing("Water LOD0 (fine)", ocean.transform, 120f, 90, 4, 0f, addReflection: true);
+            BuildWaterRing("Water LOD1 (coarse)", ocean.transform, 480f, 40, 5, -0.20f, addReflection: false);
 
-            var follow = detail.AddComponent<OceanFollowViewer>();
-            follow.snap = WaterTileSize;
-
-            var refl = detail.AddComponent<Pinwheel.Poseidon.PlanarReflectionRenderer>();
-            refl.textureResolution = 512;   // crisp sun/sky reflection
-            refl.reflectionLayers = ~((1 << LayerMask.NameToLayer("Water")) | (1 << LayerMask.NameToLayer("UI")));
-
-            // -- horizon sheet -------------------------------------------------------------------------
             float horizonSize = size * 2.4f;
             var horizon = new GameObject("Water Horizon");
             horizon.transform.SetParent(ocean.transform, false);
-            horizon.transform.localPosition = new Vector3(-horizonSize * 0.5f, -0.1f, -horizonSize * 0.5f);
+            horizon.transform.localPosition = new Vector3(-horizonSize * 0.5f, -0.35f, -horizonSize * 0.5f);
             var twh = horizon.AddComponent<Pinwheel.Poseidon.TileableWater>();
             twh.material = waterMaterial;
             twh.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;
             twh.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
-            { size = horizonSize, resolution = 48, needNormals = false, needTangents = false };
+            { size = horizonSize, resolution = 40, needNormals = false, needTangents = false };
             twh.GetOrAddTile(0, 0);
             twh.GenerateMesh();
 
@@ -447,6 +440,41 @@ namespace IslandSystem
             tide.seaLevel = waterLevel;
             tide.amplitude = 1.5f;
             tide.period = 120f;
+        }
+
+        /// <summary>One viewer-following LOD ring: a count×count grid of hexagon water tiles at the given tile
+        /// size/resolution, held at local Y <paramref name="y"/> (rings stack in Y to hide res-boundary cracks).</summary>
+        Pinwheel.Poseidon.TileableWater BuildWaterRing(string name, Transform parent, float tileSize, int resolution,
+            int count, float y, bool addReflection)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(0f, y, 0f);
+            var tw = go.AddComponent<Pinwheel.Poseidon.TileableWater>();
+            tw.material = waterMaterial;
+            tw.meshPattern = Pinwheel.Poseidon.PlaneMeshPattern.Hexagon;
+            tw.tileMeshDesc = new Pinwheel.Poseidon.TileMeshDesc
+            { size = tileSize, resolution = resolution, needNormals = false, needTangents = false };
+            int half = count / 2;
+            for (int tz = -half; tz < count - half; tz++)
+                for (int tx = -half; tx < count - half; tx++)
+                    tw.GetOrAddTile(tx, tz);
+            tw.GenerateMesh();
+
+            go.AddComponent<OceanFollowViewer>().snap = tileSize;   // follows the viewer, keeps its local Y offset
+
+            if (addReflection)
+            {
+                var refl = go.AddComponent<Pinwheel.Poseidon.PlanarReflectionRenderer>();
+                refl.textureResolution = 256;   // reflection is a blurry surface mirror — 256 is plenty, half the fill
+                // Reflect only sky + terrain silhouette. EXCLUDE Water/UI and — crucially — Foliage: mirroring
+                // every tree of the island behind you roughly doubled the triangle load when facing the sea.
+                int foliage = LayerMask.NameToLayer("Foliage");
+                int mask = (1 << LayerMask.NameToLayer("Water")) | (1 << LayerMask.NameToLayer("UI"));
+                if (foliage >= 0) mask |= (1 << foliage);
+                refl.reflectionLayers = ~mask;
+            }
+            return tw;
         }
 
         /// <summary>Rebuild ONLY the ocean water (native Poseidon setup) without regenerating the islands.</summary>

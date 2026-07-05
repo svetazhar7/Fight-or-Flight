@@ -7,8 +7,8 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: MixedWoodlandsForest
-  m_DiffuseTexture: {fileID: 2800000, guid: 3790d838da5452e4db7e37c4d40e0f30, type: 3}
-  m_NormalMapTexture: {fileID: 2800000, guid: 8515a7e9b96b5d740958151128aab15a, type: 3}
+  m_DiffuseTexture: {fileID: 2800000, guid: ac07a4bfc94e12c46b143ebb581c5425, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 02259883ff5c5a64fa61f81596e4e01a, type: 3}
   m_MaskMapTexture: {fileID: 0}
   m_TileSize: {x: 2, y: 2}
   m_TileOffset: {x: 0, y: 0}

@@ -1,15 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace IslandSystem
 {
     /// <summary>
-    /// Streams FLOWER clusters around the viewer exactly like the grass (<see cref="IslandGrassField"/>):
-    /// chunks within <see cref="viewDistance"/> are BUILT only when the camera looks at them (frustum gate,
-    /// inner ring always) and removed by distance. Unlike the GPU-instanced grass, flowers are full prefab
-    /// GameObjects — they keep their own materials and look — but they're sparse enough that building a
-    /// chunk's worth is cheap. Per-chunk deterministic seed → identical flowers on every networked peer.
-    /// Trees/rocks stay generation-time (always loaded); only flowers stream.
+    /// Streams FLOWER clusters around the viewer like the grass (<see cref="IslandGrassField"/>): chunks within
+    /// <see cref="viewDistance"/> are BUILT only when the camera looks at them (frustum gate, inner ring always)
+    /// and removed by distance. Each chunk is GPU-INSTANCED — the flower/bush prefab meshes are drawn with
+    /// Graphics.RenderMeshInstanced (a few draw calls for thousands of flowers) instead of one GameObject each,
+    /// which is what pushed the draw-call count into the thousands. They use the IslandSystem/Foliage shader
+    /// (wind + smooth distance fade), on the Foliage layer (excluded from the water reflection). Per-chunk
+    /// deterministic seed → identical flowers on every networked peer.
     /// </summary>
     [ExecuteAlways]
     [RequireComponent(typeof(IslandMarker))]
@@ -27,8 +29,14 @@ namespace IslandSystem
         [Tooltip("Max chunks built per update, so streaming in doesn't hitch.")]
         public int buildsPerTick = 3;
 
+        [Tooltip("Flowers cast shadows. Off is cheaper if the field is dense.")]
+        public bool castShadows = true;
+
         /// <summary>Same low-altitude gate the generation-time scatters use (no flowers on the sea fade).</summary>
         const float FadeThreshold = 0.05f;
+        // Foliage layer (excluded from the water reflection). Lazy — NameToLayer can't run in a field initializer.
+        static int _foliageLayer = -2;
+        static int FoliageLayer { get { if (_foliageLayer == -2) _foliageLayer = LayerMask.NameToLayer("Foliage"); return _foliageLayer; } }
 
         // Global shader fade band (IslandSystem/Foliage): flowers/bushes shrink into the ground across it, so
         // they dissolve in/out with distance like the grass. End sits just inside viewDistance so a plant is
@@ -36,7 +44,17 @@ namespace IslandSystem
         static readonly int FadeStartId = Shader.PropertyToID("_FoliageFadeStart");
         static readonly int FadeEndId = Shader.PropertyToID("_FoliageFadeEnd");
 
-        readonly Dictionary<long, GameObject> _chunks = new Dictionary<long, GameObject>();
+        // ---- instanced draw data ----
+        struct Part { public Mesh mesh; public int submesh; public Material material; public Matrix4x4 local; }
+        struct Batch { public Mesh mesh; public int submesh; public Material material; public Matrix4x4[] matrices; public Bounds bounds; }
+        sealed class FlowerChunk { public Batch[] batches; }
+
+        // The prefab's renderable parts (submeshes) with the mesh-local transform baked in — computed once per
+        // prefab so instance matrices are just TRS(worldPos, rot, scale) * part.local (handles FBX ×100 etc.).
+        static readonly Dictionary<GameObject, Part[]> _partCache = new Dictionary<GameObject, Part[]>();
+
+        readonly Dictionary<long, FlowerChunk> _chunks = new Dictionary<long, FlowerChunk>();
+        static readonly Plane[] _planes = new Plane[6];
         IslandMarker _marker;
         int _builtThisTick;
 
@@ -55,6 +73,7 @@ namespace IslandSystem
 
         void OnEnable()
         {
+            RenderPipelineManager.beginCameraRendering += OnBeginCamera;
 #if UNITY_EDITOR
             if (!Application.isPlaying) UnityEditor.EditorApplication.update += EditorTick;
 #endif
@@ -62,23 +81,63 @@ namespace IslandSystem
 
         void OnDisable()
         {
+            RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.update -= EditorTick;
 #endif
             ClearAll();
         }
 
-        void ClearAll()
+        void ClearAll() => _chunks.Clear();   // instanced draw data only — no GameObjects to destroy
+
+        // ---- draw the streamed chunks, GPU-instanced, per camera ----
+        void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
-            foreach (var kv in _chunks) DestroyChunk(kv.Value);
-            _chunks.Clear();
+            if (cam.cameraType != CameraType.Game && cam.cameraType != CameraType.SceneView) return;
+            if (_chunks.Count == 0) return;
+            GeometryUtility.CalculateFrustumPlanes(cam, _planes);
+            var shadow = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+            int layer = FoliageLayer >= 0 ? FoliageLayer : 0;
+
+            foreach (var kv in _chunks)
+            {
+                var chunk = kv.Value; if (chunk == null || chunk.batches == null) continue;
+                for (int i = 0; i < chunk.batches.Length; i++)
+                {
+                    var b = chunk.batches[i];
+                    if (b.matrices == null || b.matrices.Length == 0 || b.mesh == null || b.material == null) continue;
+                    if (!GeometryUtility.TestPlanesAABB(_planes, b.bounds)) continue;   // whole-chunk cull
+
+                    var rp = new RenderParams(b.material)
+                    { camera = cam, worldBounds = b.bounds, shadowCastingMode = shadow, receiveShadows = true, layer = layer };
+                    for (int start = 0; start < b.matrices.Length; start += 1023)
+                        Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, b.matrices, Mathf.Min(1023, b.matrices.Length - start), start);
+                }
+            }
         }
 
-        static void DestroyChunk(GameObject go)
+        static Part[] GetParts(GameObject prefab)
         {
-            if (go == null) return;
-            if (Application.isPlaying) Destroy(go);
-            else DestroyImmediate(go);
+            if (_partCache.TryGetValue(prefab, out var cached)) return cached;
+            var list = new List<Part>();
+            var root = prefab.transform;
+            foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>())
+            {
+                var mesh = mf.sharedMesh; var mr = mf.GetComponent<MeshRenderer>();
+                if (mesh == null || mr == null) continue;
+                Matrix4x4 local = root.worldToLocalMatrix * mf.transform.localToWorldMatrix;   // bake FBX/child transform
+                var mats = mr.sharedMaterials;
+                for (int s = 0; s < mesh.subMeshCount; s++)
+                {
+                    var mat = (mats != null && mats.Length > 0) ? mats[Mathf.Min(s, mats.Length - 1)] : null;
+                    if (mat == null) continue;
+                    mat.enableInstancing = true;
+                    list.Add(new Part { mesh = mesh, submesh = s, material = mat, local = local });
+                }
+            }
+            var arr = list.ToArray();
+            _partCache[prefab] = arr;
+            return arr;
         }
 
         void LateUpdate() { if (Application.isPlaying) Stream(ViewerPos(), ViewerCamera()); }
@@ -188,7 +247,7 @@ namespace IslandSystem
             {
                 var stale = new List<long>();
                 foreach (var kv in _chunks) if (!want.Contains(kv.Key)) stale.Add(kv.Key);
-                foreach (var k in stale) { DestroyChunk(_chunks[k]); _chunks.Remove(k); }
+                foreach (var k in stale) _chunks.Remove(k);   // instanced data only; GC reclaims it
             }
         }
 
@@ -198,12 +257,15 @@ namespace IslandSystem
         /// village; every accepted centre spawns clusterSize flowers inside clusterRadius, each re-gated
         /// individually so patches trim at band edges and village rims.
         /// </summary>
-        GameObject BuildChunk(int cx, int cz, int cseed, Vector3 origin, Vector3 size,
+        FlowerChunk BuildChunk(int cx, int cz, int cseed, Vector3 origin, Vector3 size,
             float uMin, float uMax, float vMin, float vMax)
         {
             var marker = Marker;
             var data = terrain.terrainData;
-            GameObject holder = null;
+            // Accumulate world matrices per (mesh, submesh, material) so each becomes ONE instanced draw.
+            var acc = new Dictionary<(Mesh, int, Material), List<Matrix4x4>>();
+            var bounds = new Bounds();
+            bool anyBounds = false;
 
             int bi = 0;
             foreach (var band in marker.bands)
@@ -257,32 +319,37 @@ namespace IslandSystem
                                 float s = Mathf.Lerp(rule.scaleRange.x, rule.scaleRange.y, (float)rng.NextDouble());
                                 if (s <= 0f) s = 1f;
 
-                                if (holder == null)
-                                {
-                                    holder = new GameObject($"FlowerChunk_{cx}_{cz}");
-                                    // transient: never serialized into the scene, exactly like grass chunks
-                                    holder.hideFlags = HideFlags.DontSave;
-                                    holder.transform.SetParent(terrain.transform, false);
-                                }
-
                                 Vector3 worldPos = origin + new Vector3(wx, data.GetInterpolatedHeight(fu, fv) - rule.sink, wz);
-                                GameObject go = Instantiate(prefab, holder.transform);
-                                go.hideFlags = HideFlags.DontSave;
-                                go.transform.position = worldPos;
-
                                 Quaternion rot = rule.alignToNormal
                                     ? Quaternion.FromToRotation(Vector3.up, data.GetInterpolatedNormal(fu, fv))
                                     : Quaternion.identity;
                                 if (rule.randomYRotation)
                                     rot = rot * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                                go.transform.rotation = rot;
-                                go.transform.localScale = go.transform.localScale * s;
+
+                                // Instance matrix per renderable part (folds the prefab-root scale × user scale).
+                                Vector3 scaleVec = prefab.transform.localScale * s;
+                                Matrix4x4 world = Matrix4x4.TRS(worldPos, rot, scaleVec);
+                                foreach (var part in GetParts(prefab))
+                                {
+                                    var key = (part.mesh, part.submesh, part.material);
+                                    if (!acc.TryGetValue(key, out var mats)) { mats = new List<Matrix4x4>(); acc[key] = mats; }
+                                    mats.Add(world * part.local);
+                                }
+                                if (!anyBounds) { bounds = new Bounds(worldPos, Vector3.zero); anyBounds = true; }
+                                else bounds.Encapsulate(worldPos);
                             }
                         }
                     }
                 }
             }
-            return holder;
+
+            if (acc.Count == 0) return null;
+            bounds.Expand(6f);   // pad for the plant height + wind sway so the whole-chunk cull isn't too tight
+            var batches = new Batch[acc.Count];
+            int bIdx = 0;
+            foreach (var kv in acc)
+                batches[bIdx++] = new Batch { mesh = kv.Key.Item1, submesh = kv.Key.Item2, material = kv.Key.Item3, matrices = kv.Value.ToArray(), bounds = bounds };
+            return new FlowerChunk { batches = batches };
         }
 
         static long Key(int cx, int cz) => ((long)(cx + 100000) << 21) ^ (uint)(cz + 100000);

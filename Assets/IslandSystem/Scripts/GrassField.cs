@@ -44,6 +44,10 @@ namespace IslandSystem
         List<IslandBand> _bands;
         int _builtThisTick;
         int _chunksVersion = -1;   // GrassGenerator.CacheVersion the current chunks were built with
+        // Foliage layer (excluded from the water reflection). Resolved lazily — LayerMask.NameToLayer can't run
+        // in a static field initializer (it fires during MonoBehaviour deserialization, which Unity forbids).
+        static int _foliageLayer = -2;
+        static int FoliageLayer { get { if (_foliageLayer == -2) _foliageLayer = LayerMask.NameToLayer("Foliage"); return _foliageLayer; } }
 
         // ---- GPU frustum culling (GrassFrustumCull.compute, loaded from Resources — runtime/multiplayer-safe) ----
         static ComputeShader _cullCS;
@@ -191,7 +195,8 @@ namespace IslandSystem
                         worldBounds = b.bounds,
                         matProps = b.mpb,                 // binds _PerInstanceData + _VisibleIDs
                         shadowCastingMode = ShadowCastingMode.Off,
-                        receiveShadows = true
+                        receiveShadows = true,
+                        layer = FoliageLayer >= 0 ? FoliageLayer : 0   // excluded from the water reflection
                     };
                     Graphics.RenderMeshIndirect(rp, b.mesh, b.indirectBuffer, 1);
                 }

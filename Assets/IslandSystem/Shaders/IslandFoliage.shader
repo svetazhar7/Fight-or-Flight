@@ -45,10 +45,13 @@ Shader "IslandSystem/Foliage"
         float _FoliageFadeStart;
         float _FoliageFadeEnd;
 
-        float3 FoliageFadeOS(float3 positionOS)
+        // rootWS MUST be the instance pivot obtained via TransformObjectToWorld(0) in the vertex shader — under
+        // GPU instancing (RenderMeshInstanced) reading unity_ObjectToWorld._m03 directly from a helper function
+        // returns the IDENTITY (origin), which made dCam huge and collapsed every flower to a point. Passing the
+        // matrix-resolved pivot in keeps the fade per-instance correct.
+        float3 FoliageFadeOS(float3 positionOS, float3 rootWS)
         {
             if (_FoliageFadeEnd <= _FoliageFadeStart + 0.5) return positionOS;
-            float3 rootWS = float3(unity_ObjectToWorld._m03, unity_ObjectToWorld._m13, unity_ObjectToWorld._m23);
             float dCam = distance(rootWS.xz, _WorldSpaceCameraPos.xz);
             float fade = saturate((dCam - _FoliageFadeStart) / (_FoliageFadeEnd - _FoliageFadeStart));
             return positionOS * (1.0 - fade);   // collapse toward the (ground-level) pivot
@@ -103,6 +106,7 @@ Shader "IslandSystem/Foliage"
             #pragma target 3.0
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
@@ -115,7 +119,7 @@ Shader "IslandSystem/Foliage"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; };
+            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
@@ -130,7 +134,9 @@ Shader "IslandSystem/Foliage"
             Varyings vert (Attributes IN)
             {
                 Varyings o = (Varyings)0;
-                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                UNITY_SETUP_INSTANCE_ID(IN);   // makes unity_ObjectToWorld per-instance (RenderMeshInstanced)
+                float3 rootWS = TransformObjectToWorld(float3(0,0,0));   // per-instance pivot (see FoliageFadeOS)
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz, rootWS);
                 float3 posWS = TransformObjectToWorld(posOS);
                 posWS = ApplyFoliageWind(posWS, posOS);
 
@@ -199,6 +205,7 @@ Shader "IslandSystem/Foliage"
             #pragma target 3.0
             #pragma vertex shadowVert
             #pragma fragment shadowFrag
+            #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -207,13 +214,15 @@ Shader "IslandSystem/Foliage"
             float3 _LightDirection;
             float3 _LightPosition;
 
-            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
+            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
 
             V shadowVert (A IN)
             {
                 V o;
-                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                UNITY_SETUP_INSTANCE_ID(IN);
+                float3 rootWS = TransformObjectToWorld(float3(0,0,0));
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz, rootWS);
                 float3 posWS = TransformObjectToWorld(posOS);
                 posWS = ApplyFoliageWind(posWS, posOS);
                 float3 nWS = TransformObjectToWorldNormal(IN.normalOS);
@@ -253,15 +262,18 @@ Shader "IslandSystem/Foliage"
             #pragma target 3.0
             #pragma vertex depthVert
             #pragma fragment depthFrag
+            #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            struct A { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
+            struct A { float4 positionOS : POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
 
             V depthVert (A IN)
             {
                 V o;
-                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                UNITY_SETUP_INSTANCE_ID(IN);
+                float3 rootWS = TransformObjectToWorld(float3(0,0,0));
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz, rootWS);
                 float3 posWS = TransformObjectToWorld(posOS);
                 posWS = ApplyFoliageWind(posWS, posOS);
                 o.positionCS = TransformWorldToHClip(posWS);
@@ -289,15 +301,18 @@ Shader "IslandSystem/Foliage"
             #pragma target 3.0
             #pragma vertex dnVert
             #pragma fragment dnFrag
+            #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
+            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 nWS : TEXCOORD1; };
 
             V dnVert (A IN)
             {
                 V o;
-                float3 posOS = FoliageFadeOS(IN.positionOS.xyz);
+                UNITY_SETUP_INSTANCE_ID(IN);
+                float3 rootWS = TransformObjectToWorld(float3(0,0,0));
+                float3 posOS = FoliageFadeOS(IN.positionOS.xyz, rootWS);
                 float3 posWS = TransformObjectToWorld(posOS);
                 posWS = ApplyFoliageWind(posWS, posOS);
                 o.positionCS = TransformWorldToHClip(posWS);

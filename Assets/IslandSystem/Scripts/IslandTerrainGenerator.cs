@@ -121,9 +121,25 @@ namespace IslandSystem
                                      int terraceSteps, AnimationCurve curve, float falloff, ShapeParams sp)
         {
             bool ridged = profile == HeightProfileMode.Ridged;
+            bool terraced = profile == HeightProfileMode.Terraced;
+            int steps = Mathf.Max(2, terraceSteps);
             var heights = new float[hmRes, hmRes];
             const float warpAmp = 0.06f;
-            for (int y = 0; y < hmRes; y++)
+
+            // Bake the AnimationCurve to a lookup table: AnimationCurve.Evaluate is NOT thread-safe, so it can't
+            // be called from the parallel rows. 1024 samples + linear interp is visually identical (exact for a
+            // linear curve). This is the ONE reason the multithreaded heights aren't literally bit-identical to
+            // the old per-cell Evaluate — the difference is < 1e-3 and imperceptible.
+            const int LUT = 1024;
+            var lut = new float[LUT + 1];
+            for (int i = 0; i <= LUT; i++) lut[i] = curve.Evaluate((float)i / LUT);
+
+            // MULTITHREADED: the rows are independent and everything in the body (Mathf.PerlinNoise, the static
+            // SampleHeightF / IslandShapeMask, the LUT) is thread-safe, so generate all rows across every CPU
+            // core. Keeps Unity's Perlin noise → islands are the SAME shape as before, the heightmap just builds
+            // several× faster. (Burst was avoided on purpose: it can't call Mathf.PerlinNoise, and swapping to
+            // Unity.Mathematics noise would change every island's shape.)
+            System.Threading.Tasks.Parallel.For(0, hmRes, y =>
             {
                 for (int x = 0; x < hmRes; x++)
                 {
@@ -133,15 +149,13 @@ namespace IslandSystem
                     float wy = (Mathf.PerlinNoise(fx * 2f + sp.seedOffset + 71.3f, fy * 2f + sp.seedOffset + 53.9f) - 0.5f) * warpAmp;
                     float baseH = SampleHeightF(fx + wx, fy + wy, noise, sp.seedOffset, ridged);
                     float mask = IslandShapeMask(x, y, hmRes, falloff, sp);
-                    float h = curve.Evaluate(Mathf.Clamp01(baseH * mask));
-                    if (profile == HeightProfileMode.Terraced)
-                    {
-                        int steps = Mathf.Max(2, terraceSteps);
-                        h = Mathf.Round(h * steps) / steps;
-                    }
+                    float ct = Mathf.Clamp01(baseH * mask) * LUT;
+                    int ci = (int)ct; float cf = ct - ci;
+                    float h = Mathf.Lerp(lut[ci], lut[Mathf.Min(LUT, ci + 1)], cf);
+                    if (terraced) h = Mathf.Round(h * steps) / steps;
                     heights[y, x] = Mathf.Clamp01(h);
                 }
-            }
+            });
             return heights;
         }
 
@@ -374,6 +388,41 @@ namespace IslandSystem
             return data;
         }
 
+        // ---- Island cache -------------------------------------------------
+        // The heightmap (multi-octave Perlin + relief) and the splatmap are by far the most expensive part of
+        // generation. They depend ONLY on (island type, seed, resolution, size, waterline) — deterministic — so
+        // we memoize the computed heights/maps/layers/bands/villages. Regenerating the SAME archipelago (same
+        // baseSeed+level → identical per-island seeds+sizes, e.g. re-hosting a world or re-Generate in editor)
+        // then skips all the math and just replays the arrays onto the TerrainData. In-memory only (cleared on
+        // domain reload); LRU-capped so it can't grow without bound.
+        sealed class CachedIsland
+        {
+            public int hmRes, alphaRes; public Vector3 size;
+            public TerrainLayer[] layers; public float[,] heights; public float[,,] maps;
+            public List<BiomeBand> bands; public List<VillageZone> villages;
+        }
+        static readonly Dictionary<int, CachedIsland> _islandCache = new Dictionary<int, CachedIsland>();
+        static readonly List<int> _cacheOrder = new List<int>();
+        const int IslandCacheCap = 48;
+
+        static int IslandCacheKey(IslandTypeDefinition def, int seed, int hmRes, Vector3 size, float waterline)
+            => (def != null ? def.GetInstanceID() : 0) * 397 ^ seed * 92821 ^ hmRes * 40503
+               ^ Mathf.RoundToInt(size.x * 8f) * 19349663 ^ Mathf.RoundToInt(size.y * 8f) * 83492791
+               ^ Mathf.RoundToInt(size.z * 8f) * 73856093 ^ Mathf.RoundToInt(waterline * 65536f);
+
+        /// <summary>Drop all memoized islands (call if biome assets/textures were edited so stale data isn't reused).</summary>
+        public static void ClearIslandCache() { _islandCache.Clear(); _cacheOrder.Clear(); }
+
+        static void StoreIsland(int key, CachedIsland ci)
+        {
+            if (_islandCache.ContainsKey(key)) return;
+            _islandCache[key] = ci; _cacheOrder.Add(key);
+            while (_cacheOrder.Count > IslandCacheCap)
+            {
+                int old = _cacheOrder[0]; _cacheOrder.RemoveAt(0); _islandCache.Remove(old);
+            }
+        }
+
         /// <summary>
         /// Fills an existing TerrainData with the composed island. When it will be saved as an asset, create
         /// the asset BEFORE calling this so the SetAlphamaps splatmap persists (CreateAsset drops in-memory
@@ -389,6 +438,21 @@ namespace IslandSystem
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
             int hmRes = Mathf.Max(33, resolutionOverride > 0 ? resolutionOverride : def.heightmapResolution);
+
+            // CACHE HIT: same island already computed this session — replay the arrays, skip all the math.
+            int cacheKey = IslandCacheKey(def, seed, hmRes, size, waterlineNormalized);
+            if (_islandCache.TryGetValue(cacheKey, out var cached))
+            {
+                data.heightmapResolution = cached.hmRes;
+                data.size = cached.size;
+                data.alphamapResolution = cached.alphaRes;
+                data.terrainLayers = cached.layers;
+                data.SetHeights(0, 0, cached.heights);
+                data.SetAlphamaps(0, 0, cached.maps);
+                bands.AddRange(cached.bands);
+                villages.AddRange(cached.villages);
+                return;
+            }
 
             // Valid biomes, sorted low -> high. Computed BEFORE the heightmap so the relief pass can shape
             // each elevation band by its biome's character (plains flat, mountains rugged).
@@ -521,9 +585,18 @@ namespace IslandSystem
             data.heightmapResolution = hmRes;
             data.size = size;
             data.alphamapResolution = aw;
-            data.terrainLayers = allLayers.ToArray();
+            var layerArr = allLayers.ToArray();
+            data.terrainLayers = layerArr;
             data.SetHeights(0, 0, heights);
             data.SetAlphamaps(0, 0, maps);
+
+            // Memoize for the next time this exact island is generated (re-host / re-Generate).
+            StoreIsland(cacheKey, new CachedIsland
+            {
+                hmRes = hmRes, alphaRes = aw, size = size, layers = layerArr,
+                heights = heights, maps = maps,
+                bands = new List<BiomeBand>(bands), villages = new List<VillageZone>(villages)
+            });
         }
 
         /// <summary>Bilinear sample of a normalized height grid (indexed [y, x]) at tile coords u,v in 0..1.</summary>
@@ -921,6 +994,10 @@ namespace IslandSystem
                         holder = new GameObject(holderName).transform;
                         holder.SetParent(terrain.transform, false);
                     }
+                    // Distance-cull these spawns (rocks / props): far ground detail stops rendering while its
+                    // colliders stay. Unity handles the frustum (off-screen) culling automatically.
+                    if (holder.GetComponent<SpawnCuller>() == null)
+                        holder.gameObject.AddComponent<SpawnCuller>().cullDistance = 220f;
                 }
 
                 var rng = new System.Random(seed * 73856093 ^ ruleIndex * 19349663);
@@ -1137,6 +1214,9 @@ namespace IslandSystem
 
             Transform holder = terrain.transform.Find("Village");
             if (holder == null) { holder = new GameObject("Village").transform; holder.SetParent(terrain.transform, false); }
+            // Buildings are landmarks — distance-cull them only far away (keeps colliders; Unity frustum-culls).
+            if (holder.GetComponent<SpawnCuller>() == null)
+                holder.gameObject.AddComponent<SpawnCuller>().cullDistance = 900f;
 
             int zi = 0;
             foreach (var z in villages)
