@@ -41,6 +41,17 @@ namespace IslandSystem
         [Tooltip("Fraction of trees kept at/after lodFar (0.2 = 20%).")]
         [Range(0.05f, 1f)] public float lodMinKeep = 0.2f;
 
+        [Header("Trunk colliders")]
+        [Tooltip("Give tree trunks capsule colliders. Streamed/pooled around the player (physics only in Play) so " +
+                 "there is no per-tree GameObject — only the handful of trees near you actually have a collider.")]
+        public bool generateColliders = true;
+        [Tooltip("Trunk collider radius for a scale-1 tree (m). Scaled per instance.")]
+        public float trunkRadius = 0.5f;
+        [Tooltip("Trees within this horizontal distance of the player get a capsule collider.")]
+        public float colliderDistance = 35f;
+        [Tooltip("Safety cap on how many trunk colliders exist at once (nearest trees are prioritized).")]
+        public int maxColliders = 200;
+
         // Runtime draw data (rebuilt from the serialized species; not serialized itself).
         struct Batch
         {
@@ -51,6 +62,14 @@ namespace IslandSystem
         readonly List<Batch> _batches = new List<Batch>();
         static readonly Plane[] _planes = new Plane[6];
         Terrain _terrain;
+
+        // ---- streamed trunk colliders (pooled, no per-tree GameObject) ----
+        struct Trunk { public Vector3 basePos; public float height; public float radius; }
+        readonly List<Trunk> _trunks = new List<Trunk>();
+        Transform _colliderHolder;
+        readonly List<CapsuleCollider> _colliderPool = new List<CapsuleCollider>();
+        Vector3 _lastColliderPos = new Vector3(1e9f, 1e9f, 1e9f);
+        static readonly List<int> _nearTrunks = new List<int>();
 
         [Header("Terrain occlusion (hide trees behind the hill)")]
         [Tooltip("Cull trees the island's own terrain hides (e.g. the far slope behind the peak). Off-screen " +
@@ -64,6 +83,9 @@ namespace IslandSystem
         // tree of the island behind you roughly doubled the triangle load when facing the sea).
         static int _foliageLayer = -2;
         static int FoliageLayer { get { if (_foliageLayer == -2) _foliageLayer = LayerMask.NameToLayer("Foliage"); return _foliageLayer; } }
+        // If a tree-leaf material uses the IslandSystem/Foliage shader (for wind sway), disable its streaming
+        // distance-fade — that fade is meant for streamed flowers/bushes and would make tree canopies vanish far away.
+        static readonly int UseFoliageFadeId = Shader.PropertyToID("_UseFoliageFade");
         bool _built;
 
         // ---- build API (called by IslandTerrainGenerator.PlaceTrees) ----
@@ -95,13 +117,157 @@ namespace IslandSystem
             _built = false;
         }
 
-        void OnDisable() => RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+        void OnDisable()
+        {
+            RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+            if (_colliderHolder != null)
+            {
+                if (Application.isPlaying) Destroy(_colliderHolder.gameObject);
+                else DestroyImmediate(_colliderHolder.gameObject);
+                _colliderHolder = null;
+                _colliderPool.Clear();
+            }
+        }
+
+        // ---- trunk collider streaming ----
+
+        void LateUpdate()
+        {
+            if (!Application.isPlaying || !generateColliders) return;
+            var viewer = ViewerTransform();
+            if (viewer != null) StreamColliders(viewer.position);
+        }
+
+        /// <summary>Force trunk colliders to stream around an explicit point (tests / cutscenes).</summary>
+        public void RefreshCollidersAround(Vector3 p) { if (generateColliders) StreamColliders(p, true); }
+
+        static Transform ViewerTransform()
+        {
+            if (IslandGrassField.LocalViewer != null) return IslandGrassField.LocalViewer;
+            var c = Camera.main;
+            return c != null ? c.transform : null;
+        }
+
+        void StreamColliders(Vector3 vp, bool force = false)
+        {
+            if (!_built) Rebuild();
+            if (_trunks.Count == 0) return;
+            // Throttle: only re-solve when the viewer has moved a bit (the pool is otherwise stable).
+            if (!force && _colliderHolder != null)
+            {
+                float mdx = vp.x - _lastColliderPos.x, mdz = vp.z - _lastColliderPos.z;
+                if (mdx * mdx + mdz * mdz < 4f) return;   // < 2 m
+            }
+            _lastColliderPos = vp;
+
+            float d2max = colliderDistance * colliderDistance;
+            _nearTrunks.Clear();
+            for (int i = 0; i < _trunks.Count; i++)
+            {
+                float dx = _trunks[i].basePos.x - vp.x, dz = _trunks[i].basePos.z - vp.z;
+                if (dx * dx + dz * dz <= d2max) _nearTrunks.Add(i);
+            }
+            // If more trees are in range than the cap, keep the NEAREST ones (so the player never phases through
+            // a tree right next to them just because a distant one claimed the slot).
+            if (_nearTrunks.Count > maxColliders)
+            {
+                Vector3 v = vp;
+                _nearTrunks.Sort((a, b) =>
+                {
+                    float da = Sq(_trunks[a].basePos, v), db = Sq(_trunks[b].basePos, v);
+                    return da.CompareTo(db);
+                });
+                _nearTrunks.RemoveRange(maxColliders, _nearTrunks.Count - maxColliders);
+            }
+
+            EnsurePool(_nearTrunks.Count);
+            for (int k = 0; k < _colliderPool.Count; k++)
+            {
+                var col = _colliderPool[k];
+                if (k < _nearTrunks.Count)
+                {
+                    var tr = _trunks[_nearTrunks[k]];
+                    var t = col.transform;
+                    t.SetPositionAndRotation(tr.basePos, Quaternion.identity);
+                    col.height = tr.height;
+                    col.radius = tr.radius;
+                    col.center = new Vector3(0f, tr.height * 0.5f, 0f);
+                    if (!col.gameObject.activeSelf) col.gameObject.SetActive(true);
+                }
+                else if (col.gameObject.activeSelf) col.gameObject.SetActive(false);
+            }
+        }
+
+        void EnsurePool(int count)
+        {
+            if (_colliderHolder == null)
+            {
+                var go = new GameObject("TrunkColliders") { hideFlags = HideFlags.DontSave };
+                _colliderHolder = go.transform;
+                _colliderHolder.SetParent(transform, false);
+            }
+            while (_colliderPool.Count < count && _colliderPool.Count < maxColliders)
+            {
+                var go = new GameObject("TrunkCollider") { hideFlags = HideFlags.DontSave };
+                go.transform.SetParent(_colliderHolder, false);
+                // Kinematic rigidbody so repeatedly moving the collider (as trees stream in/out) is cheap — moving
+                // a plain static collider forces PhysX to rebuild its static broadphase every time.
+                var rb = go.AddComponent<Rigidbody>();
+                rb.isKinematic = true;
+                rb.useGravity = false;
+                var col = go.AddComponent<CapsuleCollider>();
+                col.direction = 1;   // Y-axis capsule (vertical trunk)
+                _colliderPool.Add(col);
+            }
+        }
+
+        /// <summary>Combined mesh height of the prefab in its own local space (for the capsule length).</summary>
+        static float PrefabHeight(GameObject prefab)
+        {
+            var root = prefab.transform;
+            Bounds b = default; bool any = false;
+            foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                Matrix4x4 m = root.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                Vector3 c = mf.sharedMesh.bounds.center, e = mf.sharedMesh.bounds.extents;
+                for (int sx = -1; sx <= 1; sx += 2)
+                    for (int sy = -1; sy <= 1; sy += 2)
+                        for (int sz = -1; sz <= 1; sz += 2)
+                        {
+                            Vector3 p = m.MultiplyPoint3x4(c + new Vector3(e.x * sx, e.y * sy, e.z * sz));
+                            if (!any) { b = new Bounds(p, Vector3.zero); any = true; } else b.Encapsulate(p);
+                        }
+            }
+            return any ? Mathf.Max(1f, b.size.y) : 3f;
+        }
+
+        static float Sq(Vector3 a, Vector3 b) { float dx = a.x - b.x, dz = a.z - b.z; return dx * dx + dz * dz; }
 
         void Rebuild()
         {
             _batches.Clear();
+            _trunks.Clear();
             _built = true;
             if (species == null) return;
+
+            foreach (var sp in species)
+            {
+                if (sp != null && sp.prefab != null && sp.positions.Count > 0)
+                {
+                    float hPrefab = PrefabHeight(sp.prefab);
+                    for (int i = 0; i < sp.positions.Count; i++)
+                    {
+                        Vector3 sc = sp.scales[i];
+                        _trunks.Add(new Trunk
+                        {
+                            basePos = sp.positions[i],
+                            height = Mathf.Max(1f, hPrefab * Mathf.Abs(sc.y)),
+                            radius = Mathf.Max(0.1f, trunkRadius * Mathf.Max(Mathf.Abs(sc.x), Mathf.Abs(sc.z)))
+                        });
+                    }
+                }
+            }
 
             foreach (var sp in species)
             {
@@ -128,6 +294,8 @@ namespace IslandSystem
                             ? sharedMats[Mathf.Min(s, sharedMats.Length - 1)] : null;
                         if (mat == null) continue;
                         mat.enableInstancing = true;
+                        // Tree foliage must never distance-fade like streamed flowers/bushes.
+                        if (mat.HasProperty(UseFoliageFadeId)) mat.SetFloat(UseFoliageFadeId, 0f);
 
                         var matrices = new Matrix4x4[n];
                         var centers = new Vector3[n];

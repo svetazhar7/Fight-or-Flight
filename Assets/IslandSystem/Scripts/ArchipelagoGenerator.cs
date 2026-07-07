@@ -81,6 +81,18 @@ namespace IslandSystem
         [ContextMenu("Generate")]
         public void Generate()
         {
+            // Explicit editor (re)generate: drop the memoized islands FIRST so edits to a biome / island
+            // definition actually take effect. The island cache keys on the definition's INSTANCE id + seed,
+            // not its CONTENT — so without this, a cached island replays the stale heightmap & splatmaps and
+            // pressing "Generate" looks like it does nothing after you change settings. (Runtime generation via
+            // GenerateAtRuntime keeps the cache: at runtime the definition content is fixed and the varying seed
+            // is already part of the key, so cached islands stay valid and re-hosting the same world is fast.)
+            IslandTerrainGenerator.ClearIslandCache();
+            GenerateInternal();
+        }
+
+        void GenerateInternal()
+        {
             var typePalette = BuildTypePalette();
             if (typePalette.Count == 0)
             {
@@ -275,7 +287,7 @@ namespace IslandSystem
         {
             baseSeed = seed;
             level = worldLevel;
-            Generate();
+            GenerateInternal();   // keep the island cache at runtime (def content is fixed; seed is in the key)
         }
 
         List<IslandTypeDefinition> BuildTypePalette()

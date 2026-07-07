@@ -15,6 +15,8 @@ Shader "IslandSystem/Foliage"
         _BumpScale ("Normal Scale", Float) = 1.0
         _Smoothness ("Smoothness", Range(0,1)) = 0.1
 
+        [Toggle] _UseFoliageFade ("Distance Fade (streamed flowers/bushes; OFF for tree leaves)", Float) = 1
+
         [Header(Wind)]
         _WindHeight   ("Wind Height (plant height, m)", Float) = 2.0
         _WindStrength ("Wind Strength", Float) = 0.12
@@ -45,18 +47,6 @@ Shader "IslandSystem/Foliage"
         float _FoliageFadeStart;
         float _FoliageFadeEnd;
 
-        // rootWS MUST be the instance pivot obtained via TransformObjectToWorld(0) in the vertex shader — under
-        // GPU instancing (RenderMeshInstanced) reading unity_ObjectToWorld._m03 directly from a helper function
-        // returns the IDENTITY (origin), which made dCam huge and collapsed every flower to a point. Passing the
-        // matrix-resolved pivot in keeps the fade per-instance correct.
-        float3 FoliageFadeOS(float3 positionOS, float3 rootWS)
-        {
-            if (_FoliageFadeEnd <= _FoliageFadeStart + 0.5) return positionOS;
-            float dCam = distance(rootWS.xz, _WorldSpaceCameraPos.xz);
-            float fade = saturate((dCam - _FoliageFadeStart) / (_FoliageFadeEnd - _FoliageFadeStart));
-            return positionOS * (1.0 - fade);   // collapse toward the (ground-level) pivot
-        }
-
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap);
 
@@ -65,7 +55,21 @@ Shader "IslandSystem/Foliage"
             float4 _BaseColor;
             float  _Cutoff, _BumpScale, _Smoothness;
             float  _WindHeight, _WindStrength, _BendStrength;
+            float  _UseFoliageFade;   // 1 = streamed foliage fades with distance (flowers/bushes); 0 = tree leaves (never fade)
         CBUFFER_END
+
+        // Distance fade: streamed flowers/bushes SHRINK into their root near the streaming radius so they appear
+        // /vanish smoothly (globals _FoliageFadeStart/End set by IslandFlowerField). Gated per material by
+        // _UseFoliageFade so TREE LEAVES that share this shader stay full size at any distance (IslandTreeRenderer
+        // sets it to 0). rootWS MUST be the instance pivot via TransformObjectToWorld(0) — under GPU instancing,
+        // reading unity_ObjectToWorld._m03 from a helper returns identity and collapses every instance to origin.
+        float3 FoliageFadeOS(float3 positionOS, float3 rootWS)
+        {
+            if (_UseFoliageFade < 0.5 || _FoliageFadeEnd <= _FoliageFadeStart + 0.5) return positionOS;
+            float dCam = distance(rootWS.xz, _WorldSpaceCameraPos.xz);
+            float fade = saturate((dCam - _FoliageFadeStart) / (_FoliageFadeEnd - _FoliageFadeStart));
+            return positionOS * (1.0 - fade);   // collapse toward the (ground-level) pivot
+        }
 
         // World-space wind + player-flatten, anchored by object-space height (root pinned, tips sway).
         // IDENTICAL formula and phase to the grass shader's GrassVertexWS — same world position at the same

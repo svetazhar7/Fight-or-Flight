@@ -2436,7 +2436,7 @@
         "preventRotation": false
     },
     "m_Path": "Poseidon/ShaderGraph",
-    "m_GraphPrecision": 1,
+    "m_GraphPrecision": 0,
     "m_PreviewMode": 2,
     "m_OutputNode": {
         "m_Id": ""
@@ -7004,9 +7004,9 @@
     "m_ShaderOutputName": "Emission",
     "m_StageCapability": 2,
     "m_Value": {
-        "x": 0.277678906917572,
-        "y": 0.7413421869277954,
-        "z": 0.9056603908538818
+        "x": 0.6839622259140015,
+        "y": 0.9162309765815735,
+        "z": 1.0
     },
     "m_DefaultValue": {
         "x": 0.0,
