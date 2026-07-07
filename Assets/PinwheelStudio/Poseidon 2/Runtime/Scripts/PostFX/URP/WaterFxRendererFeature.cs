@@ -315,17 +315,11 @@ namespace Pinwheel.Poseidon.FX.URP
 #endregion
 
 #region PASS_NON_RENDER_GRAPH_PATH
-// Excluded on Unity 6 / URP 17: the non-RenderGraph compatibility path uses APIs removed in URP 17
-// (OnCameraSetup/Execute overrides, ResetTarget, cameraColorTargetHandle). The RenderGraph path above
-// handles rendering on Unity 6. (Project-local fix for Poseidon 2 on URP 17.)
-#if !UNITY_6000_0_OR_NEWER
-            [System.Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
-            public void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
-            {
-                ResetTarget();
-                RenderingUtils.ReAllocateHandleIfNeeded(ref m_CopiedColor, GetCopyPassTextureDescriptor(renderingData.cameraData.cameraTargetDescriptor), name: "_WaterFXPassCopyColor");
-            }
-
+            // PROJECT PATCH (URP 17 / Unity 6): the compatibility-mode ScriptableRenderPass API was removed
+            // (OnCameraSetup/Execute with RenderingData, ResetTarget, ScriptableRenderer.cameraColor/DepthTargetHandle).
+            // The two legacy methods are deleted; URP 17 uses the Render Graph path (RecordRenderGraph) above.
+            // Without this the Poseidon.Runtime assembly fails to compile and breaks every Pinwheel reference in
+            // the project. NOTE: a Poseidon RE-IMPORT reverts this — re-apply if the ocean/compile breaks again.
             private static RenderTextureDescriptor GetCopyPassTextureDescriptor(RenderTextureDescriptor desc)
             {
                 desc.msaaSamples = 1;
@@ -334,51 +328,10 @@ namespace Pinwheel.Poseidon.FX.URP
                 return desc;
             }
 
-            [System.Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
-            public void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-            {
-                VolumeStack stack = VolumeManager.instance.stack;
-                UnderwaterUrp underwater = stack.GetComponent<UnderwaterUrp>();
-                WetLensUrp wetLens = stack.GetComponent<WetLensUrp>();
-
-                bool willRenderUnderwater = underwater.intensity.value > 0;
-                bool willRenderWetLens = wetLens.strength.value * wetLens.intensity.value > 0;
-                if (!willRenderUnderwater && !willRenderWetLens)
-                    return;
-
-                ref var cameraData = ref renderingData.cameraData;
-                var cmd = CommandBufferPool.Get();
-
-                using (new ProfilingScope(cmd, profilingSampler))
-                {
-                    PassData passData = new PassData();
-                    passData.underwaterMaterialerial = this.m_underwaterMaterial;
-                    passData.wetLensMaterial = this.m_wetLensMaterial;
-                    passData.cameraForward = cameraData.camera.transform.forward;
-                    passData.cameraFov = cameraData.camera.fieldOfView;
-                    passData.cameraToWorldMatrix = cameraData.camera.cameraToWorldMatrix;
-
-                    RasterCommandBuffer rasterCmd = CommandBufferHelpers.GetRasterCommandBuffer(cmd);
-
-                    CoreUtils.SetRenderTarget(cmd, m_CopiedColor);
-                    ExecuteCopyColorPass(rasterCmd, cameraData.renderer.cameraColorTargetHandle);
-
-                    CoreUtils.SetRenderTarget(cmd, cameraData.renderer.cameraColorTargetHandle, cameraData.renderer.cameraDepthTargetHandle);
-
-                    ExecuteMainPass(rasterCmd, m_CopiedColor, passData);
-                }
-
-                context.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-
-                CommandBufferPool.Release(cmd);
-            }
-
             private static void ExecuteCopyColorPass(RasterCommandBuffer cmd, RTHandle sourceTexture)
             {
                 Blitter.BlitTexture(cmd, sourceTexture, new Vector4(1, 1, 0, 0), 0.0f, false);
             }
-#endif
 #endregion
 
 #region PASS_SHARED_RENDERING_CODE

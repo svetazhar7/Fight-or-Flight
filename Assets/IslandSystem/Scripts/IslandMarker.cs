@@ -21,8 +21,6 @@ namespace IslandSystem
         public bool isHub;
         public ClimateZone climateZone;
         public IslandType islandType;
-        [Tooltip("The archipelago level this island was generated for.")]
-        public int level;
         [Tooltip("Biome elevation bands on this island (lo..hi normalized height), low -> high.")]
         public List<IslandBand> bands = new List<IslandBand>();
         [Tooltip("Flattened village zones on this island — runtime-streamed systems (flowers) keep out of them.")]

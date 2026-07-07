@@ -248,6 +248,16 @@ namespace IslandSystem
                  "layer/biome, so the patches blend continuously across biome borders.")]
         public float variationScale = 0.03f;
 
+        [Header("Ground colour (grass adopts the terrain texture beneath it)")]
+        [Tooltip("ON: the blade ROOT is tinted toward the colour of the terrain texture directly under it " +
+                 "(sandy near beaches, earthy on dirt, green on grass) so grass blends into the ground instead of " +
+                 "sitting on a hard splat edge. OFF: grass uses only the Bottom/Top colours above.")]
+        public bool pullGroundColor = true;
+        [Tooltip("How strongly the root takes the ground colour (0 = off, 1 = fully the ground colour).")]
+        [Range(0f, 1f)] public float groundColorStrength = 0.7f;
+        [Tooltip("How far UP the blade the ground tint reaches (0.05 = just the root, 1 = the whole blade).")]
+        [Range(0.05f, 1f)] public float groundColorHeight = 0.55f;
+
         [Header("Wind")]
         [Tooltip("Sway amplitude of this layer (0 for flat moss). The wind PHASE (speed/scale) is global — " +
                  "see IslandWind — so grass, flowers and bushes all sway together.")]
@@ -341,6 +351,9 @@ namespace IslandSystem
             SyncWeights(treeRules);
             SyncWeights(rockRules);
             SyncWeights(flowerRules);
+            // Drop cached grass materials so editing a grass layer (colours, ground-colour toggle, wind, …) shows
+            // live: IslandGrassField flushes & rebuilds its chunks when GrassGenerator.CacheVersion bumps.
+            GrassGenerator.ClearCache();
         }
 
         static void SyncWeights<T>(List<T> rules) where T : ObjectSpawnRule

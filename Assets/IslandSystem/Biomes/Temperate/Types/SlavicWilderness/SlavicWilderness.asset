@@ -48,7 +48,7 @@ MonoBehaviour:
   islandFalloff: 2
   heightmapResolution: 513
   terrainSize: {x: 530, y: 120, z: 530}
-  mountainRelief: 0.5
+  mountainRelief: 0.3
   reliefFrequency: 11
   reliefOctaves: 6
   erosionStrength: 0.6

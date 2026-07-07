@@ -7,10 +7,11 @@ using UnityEditor;
 namespace IslandSystem
 {
     /// <summary>
-    /// Spawns an archipelago: <c>clamp(level,1,3)</c> HUB islands spread far apart on a ring, and around
-    /// each hub a cluster of satellite islands (configurable counts of large / medium / small), plus an
-    /// ocean + seabed sized to cover everything. Placement is radius-aware so islands never overlap. Runs
-    /// in the editor via the context menu / inspector button so each <see cref="TerrainData"/> is saved.
+    /// Spawns an archipelago: ONE central HUB island at the origin, surrounded by a cluster of satellite
+    /// islands (configurable counts of large / medium / small), plus an ocean + seabed sized to cover
+    /// everything. The hub and each satellite size range are configurable (multipliers of the island type's
+    /// terrainSize). Placement is radius-aware so islands never overlap. Runs in the editor via the context
+    /// menu / inspector button so each <see cref="TerrainData"/> is saved.
     /// </summary>
     public class ArchipelagoGenerator : MonoBehaviour
     {
@@ -19,21 +20,14 @@ namespace IslandSystem
                  "biomes (painted into elevation bands by %).")]
         public List<IslandTypeDefinition> islandTypes = new List<IslandTypeDefinition>();
 
-        [Header("Level & hubs")]
-        [Min(1)]
-        [Tooltip("Archipelago level. Hub count = clamp(level, 1, 3): L1 → 1 hub, L2 → 2, L3 and above → 3.")]
-        public int level = 1;
-        [Tooltip("Optional palette for HUB islands (the main, large islands). Falls back to 'Island types' if empty.")]
+        [Header("Central hub")]
+        [Tooltip("Optional palette for the HUB island (the main, large central island). Falls back to 'Island types' if empty.")]
         public List<IslandTypeDefinition> hubIslandTypes = new List<IslandTypeDefinition>();
-        [Tooltip("Size multiplier range for hubs (the big main islands).")]
+        [Tooltip("Size multiplier range for the central hub island (multiplies its type's terrainSize) — set it " +
+                 "just like the satellite island size ranges below.")]
         public Vector2 hubSizeMultiplierRange = new Vector2(1.7f, 2.1f);
-        [Tooltip("Distance between hubs — they are spread far apart on a ring.")]
-        public float hubSeparation = 2600f;
 
-        /// <summary>Hubs never exceed this many, however high the level grows.</summary>
-        public const int MaxHubs = 3;
-
-        [Header("Satellites around each hub")]
+        [Header("Satellite islands (around the hub)")]
         [Min(0)] public int largePerHub = 2;
         [Min(0)] public int mediumPerHub = 3;
         [Min(0)] public int smallPerHub = 4;
@@ -108,48 +102,42 @@ namespace IslandSystem
 
             Material terrainMat = GetOrCreateTerrainMaterial();
 
-            int hubCount = Mathf.Clamp(level, 1, MaxHubs);          // L1→1, L2→2, L3+→3
             var hubPalette = BuildHubPalette(typePalette);
-            Vector3[] hubCenters = HubCenters(hubCount, hubSeparation);
             var placed = new List<Placed>();
             int idx = 0;
 
-            // 1) Hubs at their ring positions (far apart).
-            for (int h = 0; h < hubCount; h++)
+            // 1) The single central HUB island, at the origin.
+            Vector3 hubCenter = Vector3.zero;
             {
                 int seed = baseSeed + idx * 977;
                 var rng = new System.Random(seed);
                 var def = hubPalette[rng.Next(hubPalette.Count)];
                 Vector3 size = SizeFor(def, hubSizeMultiplierRange, rng);
-                float landRadius = LandRadius(size);
-                placed.Add(new Placed { center = hubCenters[h], landRadius = landRadius });
-                SpawnIsland(root, terrainMat, def, seed, size, hubCenters[h], true, "Hub", h, ResForTier(def, 2));
+                placed.Add(new Placed { center = hubCenter, landRadius = LandRadius(size) });
+                SpawnIsland(root, terrainMat, def, seed, size, hubCenter, true, "Hub", 0, ResForTier(def, 2));
                 idx++;
             }
 
-            // 2) Satellite cluster around each hub: configurable large / medium / small counts.
+            // 2) Satellite islands scattered around the central hub: configurable large / medium / small counts.
             var cats = new (int count, Vector2 range, int tier)[]
             {
                 (largePerHub,  largeSizeRange,  2),
                 (mediumPerHub, mediumSizeRange, 1),
                 (smallPerHub,  smallSizeRange,  0),
             };
-            for (int h = 0; h < hubCount; h++)
+            foreach (var cat in cats)
             {
-                foreach (var cat in cats)
+                for (int c = 0; c < cat.count; c++)
                 {
-                    for (int c = 0; c < cat.count; c++)
-                    {
-                        int seed = baseSeed + idx * 977;
-                        var rng = new System.Random(seed);
-                        var def = typePalette[rng.Next(typePalette.Count)];
-                        Vector3 size = SizeFor(def, cat.range, rng);
-                        float landRadius = LandRadius(size);
-                        Vector3 center = FindPlacementNear(rng, hubCenters[h], clusterRadius, placed, landRadius);
-                        placed.Add(new Placed { center = center, landRadius = landRadius });
-                        SpawnIsland(root, terrainMat, def, seed, size, center, false, "Island", idx, ResForTier(def, cat.tier));
-                        idx++;
-                    }
+                    int seed = baseSeed + idx * 977;
+                    var rng = new System.Random(seed);
+                    var def = typePalette[rng.Next(typePalette.Count)];
+                    Vector3 size = SizeFor(def, cat.range, rng);
+                    float landRadius = LandRadius(size);
+                    Vector3 center = FindPlacementNear(rng, hubCenter, clusterRadius, placed, landRadius);
+                    placed.Add(new Placed { center = center, landRadius = landRadius });
+                    SpawnIsland(root, terrainMat, def, seed, size, center, false, "Island", idx, ResForTier(def, cat.tier));
+                    idx++;
                 }
             }
 
@@ -181,7 +169,7 @@ namespace IslandSystem
 #if UNITY_EDITOR
             if (!Application.isPlaying) AssetDatabase.SaveAssets();
 #endif
-            Debug.Log($"[Archipelago] Level {level}: {hubCount} hub(s), each + {largePerHub}L/{mediumPerHub}M/{smallPerHub}S " +
+            Debug.Log($"[Archipelago] 1 central hub + {largePerHub}L/{mediumPerHub}M/{smallPerHub}S " +
                       $"satellites = {idx} islands total.", this);
         }
 
@@ -252,7 +240,6 @@ namespace IslandSystem
             marker.isHub = isHub;
             marker.climateZone = def.climateZone;
             marker.islandType = def.islandType;
-            marker.level = level;
             foreach (var b in bands) marker.bands.Add(new IslandBand { biome = b.biome, lo = b.lo, hi = b.hi });
             marker.villages.AddRange(villages);   // streamed systems (flowers) keep out of villages at runtime
 
@@ -279,14 +266,13 @@ namespace IslandSystem
         // ---- Palettes -----------------------------------------------------
 
         /// <summary>
-        /// Runtime / network entry point: apply the (server-chosen, synced) seed + level and generate the
-        /// archipelago LOCALLY with in-memory terrains (no AssetDatabase). Every peer that calls this with
-        /// the same seed builds an identical world — that's how multiplayer terrain stays in sync.
+        /// Runtime / network entry point: apply the (server-chosen, synced) seed and generate the archipelago
+        /// LOCALLY with in-memory terrains (no AssetDatabase). Every peer that calls this with the same seed
+        /// builds an identical world — that's how multiplayer terrain stays in sync.
         /// </summary>
-        public void GenerateAtRuntime(int seed, int worldLevel)
+        public void GenerateAtRuntime(int seed)
         {
             baseSeed = seed;
-            level = worldLevel;
             GenerateInternal();   // keep the island cache at runtime (def content is fixed; seed is in the key)
         }
 
@@ -324,20 +310,6 @@ namespace IslandSystem
         }
 
         // ---- Placement ----------------------------------------------------
-
-        /// <summary>Hub centers evenly spaced on a ring so neighbours are ~<paramref name="sep"/> apart.</summary>
-        static Vector3[] HubCenters(int count, float sep)
-        {
-            var arr = new Vector3[Mathf.Max(1, count)];
-            if (count <= 1) { arr[0] = Vector3.zero; return arr; }
-            float radius = sep / (2f * Mathf.Sin(Mathf.PI / count));
-            for (int i = 0; i < count; i++)
-            {
-                float a = Mathf.PI * 2f * i / count;
-                arr[i] = new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius);
-            }
-            return arr;
-        }
 
         /// <summary>
         /// Rejection-samples a spot inside the cluster disk around <paramref name="hub"/> that keeps
@@ -432,7 +404,9 @@ namespace IslandSystem
             //   LOD1 coarse: 5×5 × 480m = 2400m, res 40, y -0.20 (continuous sheet UNDER LOD0, no gap)
             //   Horizon:    fieldSize×2.4, res 40, y -0.35
 
-            var lod0 = BuildWaterRing("Water LOD0 (fine)", ocean.transform, 120f, 90, 4, 0f, addReflection: true);
+            // res kept deliberately LOW (big triangles) for the Poseidon-style low-poly faceted water — the flat
+            // per-triangle shading in IslandSystem/Water only reads as "polygons" when the tris are large enough.
+            var lod0 = BuildWaterRing("Water LOD0 (fine)", ocean.transform, 120f, 30, 4, 0f, addReflection: true);
             BuildWaterRing("Water LOD1 (coarse)", ocean.transform, 480f, 40, 5, -0.20f, addReflection: false);
 
             float horizonSize = size * 2.4f;
@@ -452,6 +426,10 @@ namespace IslandSystem
             tide.seaLevel = waterLevel;
             tide.amplitude = 1.5f;
             tide.period = 120f;
+
+            // Regenerate the Poseidon tile meshes a frame later — GenerateMesh() called in this same frame (above)
+            // yields empty tiles because the components haven't initialised yet.
+            ocean.AddComponent<OceanWaterInit>();
         }
 
         /// <summary>One viewer-following LOD ring: a count×count grid of hexagon water tiles at the given tile
@@ -511,7 +489,7 @@ namespace IslandSystem
         {
 #if UNITY_EDITOR
             if (Application.isPlaying) return; // runtime terrains are in-memory; nothing on disk to clean
-            // Delete previously generated TerrainData so changing level/counts never leaks assets.
+            // Delete previously generated TerrainData so changing island counts never leaks assets.
             foreach (var guid in AssetDatabase.FindAssets("t:TerrainData", new[] { generatedFolder }))
                 AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
 #endif

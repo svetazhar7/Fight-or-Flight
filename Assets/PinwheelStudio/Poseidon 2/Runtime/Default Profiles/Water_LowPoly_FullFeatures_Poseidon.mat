@@ -21,7 +21,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Water_LowPoly_FullFeatures_Poseidon
-  m_Shader: {fileID: -6465566751694194690, guid: aa34fe2254f27db469871a16b4330ee2, type: 3}
+  m_Shader: {fileID: 4800000, guid: 710d20396ee659d4d84bc616e600738c, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -121,27 +121,39 @@ Material:
     - _Blend: 0
     - _BumpScale: 1
     - _CausticDistortionStrength: 1
-    - _CausticSize: 12
+    - _CausticSize: 10
     - _CausticStrength: 3
+    - _CausticsDepth: 6
+    - _CausticsScale: 0.35
+    - _CausticsSharp: 6
+    - _CausticsSpeed: 0.5
+    - _CausticsStrength: 1.2
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _CrestFoamStrength: 0.5
     - _CrestMaxDepth: 5
     - _Cull: 2
     - _Cutoff: 0.5
+    - _DepthMax: 6
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _EnvironmentReflections: 1
-    - _FoamDistance: 2.5
+    - _FoamCrest: 0.35
+    - _FoamDepth: 1.4
+    - _FoamDistance: 1
+    - _FoamNoiseScale: 0.6
     - _FoamNoiseScaleHQ: 5
     - _FoamNoiseSpeedHQ: 5
+    - _FoamSharpness: 0.18
+    - _FoamSpeed: 0.12
     - _FresnelBias: 0
+    - _FresnelPower: 4
     - _FresnelStrength: 0.4
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _MaxDepth: 7
+    - _MaxDepth: 5
     - _MeshNoise: 1
     - _Metallic: 0
     - _NormalAmplitude1: 0.29
@@ -152,41 +164,51 @@ Material:
     - _NormalSlidingSpeed2: 0.56
     - _OcclusionStrength: 1
     - _Parallax: 0.005
-    - _PoseidonSineTime: -0.514249
-    - _PoseidonTime: 3993.5044
+    - _PoseidonSineTime: -0.9956981
+    - _PoseidonTime: 19451.078
     - _QueueControl: 0
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _ReflectionDistortionStrength: 20
     - _ReflectionStrength: 0.75
     - _RefractionDistortionStrength: 10
-    - _RippleHeight: 0.15
+    - _RefractionStrength: 0.35
+    - _RippleHeight: 0.1
     - _RippleNoiseScale: 5
     - _RippleSpeed: 2
     - _ShorelineFoamStrength: 1
-    - _Smoothness: 0.82
+    - _Smoothness: 0.9
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
+    - _SunSharpness: 600
+    - _SunStrength: 6
     - _Surface: 0
     - _VertexNormalError: 3.44
+    - _WaterDensity: 0.32
     - _WaveDeform: 1
-    - _WaveHeight: 0.6
-    - _WaveLength: 45
+    - _WaveHeight: 0.5
+    - _WaveLength: 40
+    - _WaveScale: 0.09
     - _WaveSpeed: 5
     - _WaveSteepness: 0.5
     - _WorkflowMode: 1
     - _ZWrite: 1
     m_Colors:
+    - _AbsorbColor: {r: 0.9, g: 0.29999998, b: 0.21999997, a: 1}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _Color: {r: 0.21999997, g: 0.78, b: 0.72, a: 0.9}
-    - _DepthColor: {r: 0.02, g: 0.43, b: 0.55, a: 1}
+    - _CausticsColor: {r: 1, g: 0.97999996, b: 0.85, a: 1}
+    - _Color: {r: 0, g: 1, b: 0.68599033, a: 0.69803923}
+    - _DeepColor: {r: 0.02, g: 0.25999996, b: 0.45, a: 0.92}
+    - _DepthColor: {r: 0.39398354, g: 0.68910015, b: 0.81886786, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
+    - _FresnelTint: {r: 0.54999995, g: 0.72, b: 0.85, a: 1}
     - _NormalSlidingDirection1: {r: 1, g: 1, b: 0, a: 0}
     - _NormalSlidingDirection2: {r: -1, g: 1, b: 0, a: 0}
+    - _ShallowColor: {r: 0.11999995, g: 0.75, b: 0.78, a: 0.35}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
-    - _Specular: {r: 1, g: 0.95, b: 0.85, a: 1}
+    - _Specular: {r: 0.19245279, g: 0.19245279, b: 0.19245279, a: 1}
     - _WaveDirection: {r: 0.71, g: 0.71, b: 0, a: 0}
     - _WaveMaskBounds: {r: -25, g: -25, b: 300, a: 300}
   m_BuildTextureStacks: []

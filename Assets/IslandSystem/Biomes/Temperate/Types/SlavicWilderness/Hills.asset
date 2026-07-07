@@ -17,7 +17,7 @@ MonoBehaviour:
   islandType: 19
   displayName: "\u0425\u043E\u043B\u043C\u044B"
   elevationOrder: 0.2
-  reliefStrength: 0.3
+  reliefStrength: 0.25
   debugColor: {r: 0.45, g: 0.62, b: 0.38, a: 1}
   noiseSettings:
     frequency: 3
@@ -65,9 +65,53 @@ MonoBehaviour:
       slopeBlend: 0
     weight: 0
   spawnRules: []
-  treeRules: []
+  treeRules:
+  - label: 
+    prefabs:
+    - {fileID: 919132149155446097, guid: 1e6569a851f65804dbcd52c4d7e191f3, type: 3}
+    - {fileID: 919132149155446097, guid: e55f5af8eca93df46accba34f3bdc60d, type: 3}
+    prefabWeights:
+    - 3
+    - 1
+    count: 0
+    density: 0
+    spacingVariation: 0
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 60
+      heightBlend: 0
+      slopeBlend: 0
+    scaleRange: {x: 0, y: 0}
+    randomYRotation: 1
+    alignToNormal: 0
+    sink: 0.05
+    nonUniformScale: 0
   rockRules: []
-  flowerRules: []
+  flowerRules:
+  - label: bush
+    prefabs:
+    - {fileID: 919132149155446097, guid: 90af68b03109feb4badad55e52e5dc71, type: 3}
+    prefabWeights:
+    - 33
+    count: 1
+    density: 0.1
+    spacingVariation: 0.5
+    where:
+      minHeight: 0.05
+      maxHeight: 0.8
+      minSlope: 0
+      maxSlope: 60
+      heightBlend: 0.08
+      slopeBlend: 10
+    scaleRange: {x: 0.8, y: 0.8}
+    randomYRotation: 1
+    alignToNormal: 0
+    sink: 0.02
+    nonUniformScale: 0
+    clusterSize: {x: 1, y: 1}
+    clusterRadius: 0.5
   village:
     enabled: 0
     buildingPrefabs: []
@@ -86,4 +130,27 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
-  grassLayers: []
+  grassLayers:
+  - enabled: 1
+    name: forest grass
+    density: 300
+    prefab: {fileID: 8061160331623397703, guid: 80ef5c7d9c2404c4cb24776dbd44f087, type: 3}
+    prefabScaleRange: {x: 1.5, y: 1.5}
+    layFlat: 0
+    alphaCutoff: 0.5
+    bottomColor: {r: 0.3647059, g: 0.5294118, b: 0.34901962, a: 1}
+    topColor: {r: 0.49411765, g: 0.63529414, b: 0.39607844, a: 1}
+    textureTiles: 2
+    colorVariation: 0.5
+    dryBottomColor: {r: 0.6431373, g: 0.7411765, b: 0.36078432, a: 1}
+    dryTopColor: {r: 0.43137258, g: 0.6156863, b: 0.22352943, a: 1}
+    variationScale: 0.7
+    windStrength: 0.13
+    bendStrength: 1
+    where:
+      minHeight: 0
+      maxHeight: 0.8
+      minSlope: 0
+      maxSlope: 60
+      heightBlend: 0.08
+      slopeBlend: 8

@@ -71,7 +71,7 @@ namespace IslandSystem
         }
 
         public static List<GrassBatch> BuildChunkInstances(Terrain terrain, List<IslandBand> bands, float waterline,
-            int seed, float uMin, float uMax, float vMin, float vMax)
+            int seed, float uMin, float uMax, float vMin, float vMax, Texture2D groundMap = null)
         {
             var batches = new List<GrassBatch>();
             if (bands == null || GrassShader == null) return batches;
@@ -138,6 +138,13 @@ namespace IslandSystem
                     var mpb = new MaterialPropertyBlock();
                     mpb.SetBuffer("_PerInstanceData", buf);
                     mpb.SetBuffer("_VisibleIDs", visible);
+                    // Grass adopts the terrain colour beneath it: bind this island's ground-albedo map + its
+                    // world XZ mapping so the shader can sample the ground under each blade's root.
+                    if (groundMap != null)
+                    {
+                        mpb.SetTexture("_GroundColorTex", groundMap);
+                        mpb.SetVector("_GroundColorParams", new Vector4(origin.x, origin.z, size.x, size.z));
+                    }
 
                     Vector3 c = origin + new Vector3((uMin + uMax) * 0.5f * size.x, size.y * 0.5f, (vMin + vMax) * 0.5f * size.z);
                     Vector3 e = new Vector3((uMax - uMin) * size.x * 0.5f + 3f, size.y * 0.5f + 3f, (vMax - vMin) * size.z * 0.5f + 3f);
@@ -273,8 +280,92 @@ namespace IslandSystem
             m.SetFloat("_WindStrength", gs.windStrength);
             m.SetFloat("_BendStrength", gs.bendStrength);
             m.SetFloat("_AmbientBoost", 0.18f); // gentle ambient so grass isn't washed-out/neon
+            // Ground-colour pull (grass root adopts the terrain texture beneath it) — toggled per layer.
+            m.SetFloat("_GroundColorStrength", gs.pullGroundColor ? gs.groundColorStrength : 0f);
+            m.SetFloat("_GroundColorHeight", gs.groundColorHeight);
             _mats[gs] = m;
             return m;
+        }
+
+        // ---- Ground colour map (grass "pulls" the colour of the terrain texture beneath it) ----------------
+
+        // Average colour of each TerrainLayer's diffuse texture, cached (textures may be non-readable, so we
+        // GPU-downsample instead of GetPixels on the source).
+        static readonly Dictionary<Texture, Color> _layerAvg = new Dictionary<Texture, Color>();
+
+        /// <summary>
+        /// Bakes a small top-down ground-albedo map for the terrain: each texel is the splatmap-weighted blend of
+        /// the terrain layers' average colours. The grass shader samples it under each blade's root so grass
+        /// takes on the colour of the ground it grows from. The CALLER owns the returned texture (destroy it when
+        /// the island/field goes away). Null if the terrain has no layers.
+        /// </summary>
+        public static Texture2D BuildGroundColorMap(Terrain terrain)
+        {
+            if (terrain == null) return null;
+            var data = terrain.terrainData;
+            var layers = data.terrainLayers;
+            if (layers == null || layers.Length == 0) return null;
+            int aw = data.alphamapWidth, ah = data.alphamapHeight;
+            if (aw <= 0 || ah <= 0) return null;
+
+            float[,,] alpha = data.GetAlphamaps(0, 0, aw, ah);   // [y (v/Z), x (u/X), layer]
+            int nl = Mathf.Min(layers.Length, alpha.GetLength(2));
+            var avg = new Color[nl];
+            for (int l = 0; l < nl; l++) avg[l] = LayerAverageColor(layers[l]);
+
+            int outRes = Mathf.Clamp(Mathf.Max(aw, ah), 8, 256);
+            var tex = new Texture2D(outRes, outRes, TextureFormat.RGB24, false)
+            { name = "GrassGroundColor", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color[outRes * outRes];
+            for (int j = 0; j < outRes; j++)
+            {
+                int ay = outRes == 1 ? 0 : Mathf.RoundToInt(j / (float)(outRes - 1) * (ah - 1));
+                for (int i = 0; i < outRes; i++)
+                {
+                    int ax = outRes == 1 ? 0 : Mathf.RoundToInt(i / (float)(outRes - 1) * (aw - 1));
+                    Color c = Color.black; float wsum = 0f;
+                    for (int l = 0; l < nl; l++) { float w = alpha[ay, ax, l]; c += avg[l] * w; wsum += w; }
+                    if (wsum > 1e-4f) c /= wsum; else c = new Color(0.5f, 0.5f, 0.5f);
+                    c.a = 1f;
+                    px[j * outRes + i] = c;   // pixel (i=u, j=v) ← alphamap[ay=v, ax=u]
+                }
+            }
+            tex.SetPixels(px);
+            tex.Apply(false, false);
+            return tex;
+        }
+
+        static Color LayerAverageColor(TerrainLayer layer)
+        {
+            var tex = layer != null ? layer.diffuseTexture : null;
+            if (tex == null) return new Color(0.5f, 0.5f, 0.5f);
+            if (_layerAvg.TryGetValue(tex, out var cached)) return cached;
+            Color avg = AverageTextureColor(tex);
+            _layerAvg[tex] = avg;
+            return avg;
+        }
+
+        /// <summary>Average colour via an 8×8 GPU downsample + readback — works on non-readable textures.</summary>
+        static Color AverageTextureColor(Texture src)
+        {
+            const int S = 8;
+            var rt = RenderTexture.GetTemporary(S, S, 0, RenderTextureFormat.ARGB32);
+            var prevActive = RenderTexture.active;
+            Graphics.Blit(src, rt);   // bilinear downsample: each of the 64 texels is a neighbourhood average
+            RenderTexture.active = rt;
+            var tmp = new Texture2D(S, S, TextureFormat.RGBA32, false);
+            tmp.ReadPixels(new Rect(0, 0, S, S), 0, 0);
+            tmp.Apply();
+            RenderTexture.active = prevActive;
+            RenderTexture.ReleaseTemporary(rt);
+
+            var pixels = tmp.GetPixels();
+            Object.DestroyImmediate(tmp);
+            Color sum = Color.black;
+            for (int i = 0; i < pixels.Length; i++) sum += pixels[i];
+            Color a = sum / Mathf.Max(1, pixels.Length);
+            a.a = 1f;
+            return a;
         }
 
         static Mesh GetPrefabMesh(GameObject prefab)

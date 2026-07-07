@@ -1,0 +1,137 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61a816060dae2b445bf7d28871b3a6ac, type: 3}
+  m_Name: Forests
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.BiomeAssetManifest
+  biomeName: Forests
+  climateZone: 2
+  islandType: 23
+  displayName: "\u041B\u0435\u0441\u0430"
+  elevationOrder: 0.15
+  reliefStrength: 0.05
+  debugColor: {r: 0.22, g: 0.42, b: 0.26, a: 1}
+  noiseSettings:
+    frequency: 3
+    amplitude: 1
+    octaves: 5
+  heightProfile: 0
+  terraceSteps: 8
+  heightCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0.3928566
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  islandFalloff: 2.5
+  heightmapResolution: 513
+  terrainSize: {x: 500, y: 150, z: 500}
+  texturePatchScale: 6
+  textureLayers:
+  - label: Forest floor
+    terrainLayer: {fileID: 8574412962073106934, guid: 42de20769bde1244a9b26a508bf730be, type: 2}
+    where:
+      minHeight: 0
+      maxHeight: 1
+      minSlope: 0
+      maxSlope: 90
+      heightBlend: 0.05
+      slopeBlend: 5
+    weight: 1
+  spawnRules: []
+  treeRules:
+  - label: conifer
+    prefabs:
+    - {fileID: 919132149155446097, guid: 8ed5eeb402ad4f142a3716d2fb9d8190, type: 3}
+    - {fileID: 919132149155446097, guid: 15acd9e62fb7a714092ffc75c0226982, type: 3}
+    - {fileID: 919132149155446097, guid: 567a09bcd9652064fadcf8cfd62265fe, type: 3}
+    prefabWeights:
+    - 1
+    - 1
+    - 2
+    count: 0
+    density: 0
+    spacingVariation: 0
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 60
+      heightBlend: 0
+      slopeBlend: 0
+    scaleRange: {x: 0, y: 0}
+    randomYRotation: 1
+    alignToNormal: 0
+    sink: 0.05
+    nonUniformScale: 0
+  rockRules: []
+  flowerRules: []
+  village:
+    enabled: 1
+    buildingPrefabs:
+    - {fileID: 2763672626335216884, guid: faa232351140d09468c55b9d5a0ec242, type: 3}
+    villageCount: 1
+    villageRadius: 55
+    blendRadius: 20
+    buildingsPerVillage: 6
+    minDistanceBetweenVillages: 220
+    minDistanceBetweenBuildings: 11
+    where:
+      minHeight: 0.12
+      maxHeight: 0.6
+      minSlope: 0
+      maxSlope: 14
+      heightBlend: 0.08
+      slopeBlend: 10
+    buildingScaleRange: {x: 1, y: 1}
+    randomYRotation: 1
+  grassLayers:
+  - enabled: 1
+    name: forest grass
+    density: 300
+    prefab: {fileID: 8061160331623397703, guid: 80ef5c7d9c2404c4cb24776dbd44f087, type: 3}
+    prefabScaleRange: {x: 1.5, y: 1.5}
+    layFlat: 0
+    alphaCutoff: 0.5
+    bottomColor: {r: 0.34154677, g: 0.5754717, b: 0.16015486, a: 1}
+    topColor: {r: 0.43432876, g: 0.6132076, b: 0.17644179, a: 1}
+    textureTiles: 2
+    colorVariation: 0.5
+    dryBottomColor: {r: 0.52156866, g: 0.654902, b: 0.16862746, a: 1}
+    dryTopColor: {r: 0.3764706, g: 0.6039216, b: 0.12941177, a: 1}
+    variationScale: 0.7
+    windStrength: 0.13
+    bendStrength: 1
+    where:
+      minHeight: 0
+      maxHeight: 0.8
+      minSlope: 0
+      maxSlope: 60
+      heightBlend: 0.08
+      slopeBlend: 8

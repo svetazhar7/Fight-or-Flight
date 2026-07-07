@@ -44,6 +44,8 @@ namespace IslandSystem
         List<IslandBand> _bands;
         int _builtThisTick;
         int _chunksVersion = -1;   // GrassGenerator.CacheVersion the current chunks were built with
+        Texture2D _groundMap;      // this island's ground-albedo map (grass root pulls the terrain colour); owned here
+        TerrainData _groundMapFor; // which terrainData _groundMap was baked for
         // Foliage layer (excluded from the water reflection). Resolved lazily — LayerMask.NameToLayer can't run
         // in a static field initializer (it fires during MonoBehaviour deserialization, which Unity forbids).
         static int _foliageLayer = -2;
@@ -95,12 +97,23 @@ namespace IslandSystem
             UnityEditor.EditorApplication.update -= EditorTick;
 #endif
             DisposeAll();
+            DestroyGroundMap();
         }
 
         void DisposeAll()
         {
             foreach (var kv in _chunks) DisposeChunk(kv.Value);
             _chunks.Clear();
+        }
+
+        void DestroyGroundMap()
+        {
+            if (_groundMap != null)
+            {
+                if (Application.isPlaying) Destroy(_groundMap); else DestroyImmediate(_groundMap);
+                _groundMap = null;
+            }
+            _groundMapFor = null;
         }
 
         static void DisposeChunk(List<GrassBatch> list)
@@ -216,6 +229,14 @@ namespace IslandSystem
                 _chunksVersion = GrassGenerator.CacheVersion;
             }
 
+            // Bake this island's ground-colour map once (grass tints its root toward the terrain beneath it).
+            if (_groundMap == null || _groundMapFor != terrain.terrainData)
+            {
+                DestroyGroundMap();
+                _groundMap = GrassGenerator.BuildGroundColorMap(terrain);
+                _groundMapFor = terrain.terrainData;
+            }
+
             _builtThisTick = 0;
 
             Vector3 origin = terrain.transform.position;
@@ -272,7 +293,7 @@ namespace IslandSystem
 
                     int cseed = seed ^ (cx * 73856093) ^ (cz * 19349663);
                     var batches = GrassGenerator.BuildChunkInstances(terrain, Bands, waterline, cseed,
-                        Mathf.Clamp01(u0), Mathf.Clamp01(u1), Mathf.Clamp01(v0), Mathf.Clamp01(v1));
+                        Mathf.Clamp01(u0), Mathf.Clamp01(u1), Mathf.Clamp01(v0), Mathf.Clamp01(v1), _groundMap);
                     // Distance-fade band: each blade picks a random vanish distance inside it (dithered thinning,
                     // no contour arcs) — fully gone just inside viewDistance so the chunk boundary never shows.
                     for (int i = 0; i < batches.Count; i++)

@@ -25,6 +25,10 @@ Shader "IslandSystem/Grass"
         _WindStrength ("Wind Strength", Float) = 0.15
         _BendStrength ("Interactor Bend", Float) = 1.0
         _AmbientBoost ("Ambient Boost", Range(0,1)) = 0.35
+
+        [Header(Ground color pull)]
+        _GroundColorStrength ("Ground Color Strength (root blends to the terrain beneath)", Range(0,1)) = 0.7
+        _GroundColorHeight ("Ground Color Height (fraction of the blade affected)", Range(0.05,1)) = 0.55
     }
     SubShader
     {
@@ -46,6 +50,12 @@ Shader "IslandSystem/Grass"
         StructuredBuffer<uint>     _VisibleIDs;          // ids that survived GPU frustum culling (GrassFrustumCull.compute)
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
 
+        // Per-ISLAND ground albedo (terrain splatmap × each layer's average colour), bound per-chunk via the MPB.
+        // The blade root is tinted toward this so grass automatically adopts the colour of the terrain underneath
+        // it (sandy near beaches, earthy on dirt, etc.). _GroundColorParams: xy = terrain origin XZ, zw = size XZ.
+        TEXTURE2D(_GroundColorTex); SAMPLER(sampler_GroundColorTex);
+        float4 _GroundColorParams;
+
         CBUFFER_START(UnityPerMaterial)
             float4 _MainTex_ST;
             float4 _BottomColor, _TopColor;
@@ -53,6 +63,7 @@ Shader "IslandSystem/Grass"
             float  _Cutoff, _Tiles, _ColorVariation, _VariationScale;
             float  _FadeStart, _FadeEnd;
             float  _WindHeight, _WindStrength, _BendStrength, _AmbientBoost;
+            float  _GroundColorStrength, _GroundColorHeight;
         CBUFFER_END
 
         // Cheap 2D value noise for the large-scale colour variation. WORLD-space input → patches are
@@ -162,7 +173,7 @@ Shader "IslandSystem/Grass"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; float3 ambient : TEXCOORD5; float dry : TEXCOORD6; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; float3 ambient : TEXCOORD5; float dry : TEXCOORD6; float3 gcol : TEXCOORD7; };
 
             Varyings vert (Attributes IN)
             {
@@ -175,6 +186,12 @@ Shader "IslandSystem/Grass"
                 o.nWS = nWS;
                 o.wpos = posWS;
                 o.fog = ComputeFogFactor(o.positionCS.z);
+
+                // Ground colour under this blade's ROOT (the instance pivot), sampled once so the whole blade
+                // shares it (no per-vertex shimmer from the wind sway). Unused if no map is bound (guarded in frag).
+                float4x4 gm = _PerInstanceData[_VisibleIDs[IN.instanceID]];
+                float2 guv = (float2(gm._m03, gm._m23) - _GroundColorParams.xy) / max(1e-4, _GroundColorParams.zw);
+                o.gcol = SAMPLE_TEXTURE2D_LOD(_GroundColorTex, sampler_GroundColorTex, guv, 0).rgb;
 
                 // Moved out of the fragment (big per-pixel savings over full-screen grass): the SH ambient and
                 // the large-scale colour-variation noise (patchNoise = domain warp + 3 octaves) are smooth over
@@ -207,6 +224,14 @@ Shader "IslandSystem/Grass"
                 float3 tint   = lerp(bottom, top, saturate(i.grad));
 
                 float3 col = tex.rgb * tint * lighting;
+
+                // Pull the blade ROOT toward the terrain colour beneath it (0 at/above _GroundColorHeight up the
+                // blade, full at the root) so grass blends seamlessly into whatever ground it grows on. Skipped
+                // when no ground map is bound (_GroundColorParams.z == 0). The ground colour is lit like the grass.
+                float hasGround = step(1e-4, _GroundColorParams.z);
+                float rootBlend = _GroundColorStrength * hasGround * saturate(1.0 - i.grad / max(0.05, _GroundColorHeight));
+                col = lerp(col, i.gcol * lighting, rootBlend);
+
                 col = MixFog(col, i.fog);
                 return half4(col, 1.0);
             }

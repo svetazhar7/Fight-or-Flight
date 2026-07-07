@@ -6,7 +6,7 @@ namespace IslandSystem
 {
     /// <summary>
     /// Makes the archipelago multiplayer-correct with FishNet. The terrain is NEVER sent over the network —
-    /// only a world <b>seed</b> (and level). The SERVER picks the seed once and syncs it; every peer (the
+    /// only a world <b>seed</b>. The SERVER picks the seed once and syncs it; every peer (the
     /// server and each client, including late joiners) regenerates the SAME archipelago locally from that
     /// seed. Cheap to network and guaranteed consistent (the generator is fully deterministic per seed).
     ///
@@ -20,7 +20,6 @@ namespace IslandSystem
         public int fixedSeed = 0;
 
         private readonly SyncVar<int> _seed = new();
-        private readonly SyncVar<int> _level = new();
 
         private ArchipelagoGenerator _generator;
         private bool _built;
@@ -37,8 +36,7 @@ namespace IslandSystem
         public override void OnStartServer()
         {
             base.OnStartServer();
-            // The server owns the world: choose the seed + level once and sync them to everyone.
-            _level.Value = _generator.level;
+            // The server owns the world: choose the seed once and sync it to everyone.
             _seed.Value = fixedSeed != 0 ? fixedSeed : Random.Range(int.MinValue, int.MaxValue);
             Build(); // the server needs its own copy too (physics, spawn points, etc.)
         }
@@ -56,7 +54,7 @@ namespace IslandSystem
         {
             if (_built) return;            // host runs both OnStartServer + OnStartClient — generate once
             _built = true;
-            _generator.GenerateAtRuntime(_seed.Value, _level.Value);
+            _generator.GenerateAtRuntime(_seed.Value);
         }
 
         public override void OnStopNetwork()
