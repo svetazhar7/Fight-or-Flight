@@ -780,33 +780,24 @@ namespace IslandSystem
 
         /// <summary>
         /// Scatters the biomes' ROCK rules as GPU-INSTANCED rocks (like the trees/flowers — NO per-rock GameObject)
-        /// on a child "Rocks" renderer. Rocks are kept OFF the trees (tree-avoidance), aligned to the terrain
-        /// normal so they sit flush on the ground instead of floating, off villages/fade, within each rule's band.
+        /// via an <see cref="IslandRockRenderer"/> COMPONENT on the terrain itself (no "Rocks" child in the
+        /// hierarchy). Rocks are kept OFF the trees (tree-avoidance), aligned to the terrain normal so they sit
+        /// flush on the ground instead of floating, off villages/fade, within each rule's band.
         /// </summary>
         public static void ScatterRocks(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             if (bands == null) return;
 
-            // Reuse the tree renderer for rocks on a child GO — but WITHOUT colliders / density-LOD / terrain
-            // occlusion. Replace any legacy GameObject "Rocks" holder from an older generation.
-            Transform holder = terrain.transform.Find("Rocks");
-            if (holder != null && holder.GetComponent<IslandTreeRenderer>() == null)
+            // Drop any legacy "Rocks" child GameObject from an older generation (rocks are now a component).
+            var legacy = terrain.transform.Find("Rocks");
+            if (legacy != null)
             {
-                if (Application.isPlaying) Object.Destroy(holder.gameObject); else Object.DestroyImmediate(holder.gameObject);
-                holder = null;
+                if (Application.isPlaying) Object.Destroy(legacy.gameObject); else Object.DestroyImmediate(legacy.gameObject);
             }
-            IslandTreeRenderer rockRenderer;
-            if (holder == null)
-            {
-                var go = new GameObject("Rocks");
-                go.transform.SetParent(terrain.transform, false);
-                rockRenderer = go.AddComponent<IslandTreeRenderer>();
-            }
-            else rockRenderer = holder.GetComponent<IslandTreeRenderer>();
-            rockRenderer.generateColliders = false;
-            rockRenderer.terrainOcclusion = false;
-            rockRenderer.lodMinKeep = 1f;        // rocks are sparse — never thin them out with distance
-            rockRenderer.lodNear = 100000f;
+
+            // Dedicated instanced rock renderer, as a component on the terrain GO (no child object).
+            var rockRenderer = terrain.GetComponent<IslandRockRenderer>();
+            if (rockRenderer == null) rockRenderer = terrain.gameObject.AddComponent<IslandRockRenderer>();
             rockRenderer.castShadows = true;
             rockRenderer.BeginBuild();
 

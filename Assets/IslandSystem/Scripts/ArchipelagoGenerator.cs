@@ -407,7 +407,7 @@ namespace IslandSystem
             // res kept deliberately LOW (big triangles) for the Poseidon-style low-poly faceted water — the flat
             // per-triangle shading in IslandSystem/Water only reads as "polygons" when the tris are large enough.
             var lod0 = BuildWaterRing("Water LOD0 (fine)", ocean.transform, 120f, 30, 4, 0f, addReflection: true);
-            BuildWaterRing("Water LOD1 (coarse)", ocean.transform, 480f, 40, 5, -0.20f, addReflection: false);
+            var lod1 = BuildWaterRing("Water LOD1 (coarse)", ocean.transform, 480f, 40, 5, -0.20f, addReflection: false);
 
             float horizonSize = size * 2.4f;
             var horizon = new GameObject("Water Horizon");
@@ -430,6 +430,12 @@ namespace IslandSystem
             // Regenerate the Poseidon tile meshes a frame later — GenerateMesh() called in this same frame (above)
             // yields empty tiles because the components haven't initialised yet.
             ocean.AddComponent<OceanWaterInit>();
+
+            // Hide the whole ocean (and its costly planar-reflection pass) when the viewer is down inside an island
+            // with no sea in view — the water under the landmass is pure waste there. See OceanVisibilityGate.
+            var gate = ocean.AddComponent<OceanVisibilityGate>();
+            gate.waterLevel = waterLevel;
+            gate.rings = new[] { lod0.transform, lod1.transform, horizon.transform };
         }
 
         /// <summary>One viewer-following LOD ring: a count×count grid of hexagon water tiles at the given tile

@@ -21,6 +21,10 @@ Shader "IslandSystem/Foliage"
         _WindHeight   ("Wind Height (plant height, m)", Float) = 2.0
         _WindStrength ("Wind Strength", Float) = 0.12
         _BendStrength ("Interactor Bend", Float) = 1.0
+
+        [Header(Wind LOD)]
+        _WindFadeStart ("Wind LOD Start (m — wind fades out)", Float) = 60.0
+        _WindFadeEnd   ("Wind LOD End (m — no animation past here)", Float) = 150.0
     }
 
     SubShader
@@ -55,6 +59,7 @@ Shader "IslandSystem/Foliage"
             float4 _BaseColor;
             float  _Cutoff, _BumpScale, _Smoothness;
             float  _WindHeight, _WindStrength, _BendStrength;
+            float  _WindFadeStart, _WindFadeEnd;   // distance LOD: wind animation fades out between these (perf)
             float  _UseFoliageFade;   // 1 = streamed foliage fades with distance (flowers/bushes); 0 = tree leaves (never fade)
         CBUFFER_END
 
@@ -76,7 +81,15 @@ Shader "IslandSystem/Foliage"
         // time gives the same offset, so a flower leans exactly with the grass blades beside it.
         float3 ApplyFoliageWind(float3 positionWS, float3 positionOS)
         {
-            float bend = saturate(positionOS.y / max(0.01, _WindHeight));
+            // WIND LOD: fade the whole animation out with camera distance and SKIP it entirely past _WindFadeEnd —
+            // distant foliage stops paying for the sway + interactor loop (and its verts go static, so the GPU can
+            // reuse them). The fade is smooth so leaves don't visibly "freeze" at the boundary. All passes call this
+            // same function, so forward / shadow / depth stay in lockstep (no z-fighting between animated & static).
+            float dCam = distance(positionWS.xz, _WorldSpaceCameraPos.xz);
+            float windScale = 1.0 - saturate((dCam - _WindFadeStart) / max(0.01, _WindFadeEnd - _WindFadeStart));
+            if (windScale <= 0.001) return positionWS;   // far away: no animation at all
+
+            float bend = saturate(positionOS.y / max(0.01, _WindHeight)) * windScale;
 
             float2 wp = positionWS.xz * _IslandWindScale; float ph = _Time.y * _IslandWindSpeed;
             float w = sin(ph + wp.x + wp.y) + 0.5 * sin(ph * 1.7 + wp.x * 0.7 - wp.y * 1.3);

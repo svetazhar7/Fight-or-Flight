@@ -35,11 +35,15 @@ namespace IslandSystem
 
         [Header("Distance density LOD (metres)")]
         [Tooltip("Full detail within this distance.")]
-        public float lodNear = 160f;
+        public float lodNear = 220f;
         [Tooltip("At this distance only lodMinKeep of the trees remain.")]
-        public float lodFar = 600f;
-        [Tooltip("Fraction of trees kept at/after lodFar (0.2 = 20%).")]
-        [Range(0.05f, 1f)] public float lodMinKeep = 0.2f;
+        public float lodFar = 800f;
+        // Kept at 0.55 (not the old 0.2): thinning to 20% made distant islands read as FIR-ONLY — the smaller,
+        // less-numerous deciduous trees dropped out and their mid-green canopies blend into the grass, so only the
+        // big dark firs stayed visible. 0.55 keeps the mixed canopy full at range (perf: more distant instanced
+        // trees, but they're frustum-culled, wind-static past 150 m, and tiny on screen). Tune down if FPS needs it.
+        [Tooltip("Fraction of trees kept at/after lodFar (0.55 = 55%).")]
+        [Range(0.05f, 1f)] public float lodMinKeep = 0.55f;
 
         [Header("Trunk colliders")]
         [Tooltip("Give tree trunks capsule colliders. Streamed/pooled around the player (physics only in Play) so " +
