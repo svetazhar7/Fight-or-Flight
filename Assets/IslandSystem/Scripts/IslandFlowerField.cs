@@ -310,6 +310,7 @@ namespace IslandSystem
                         density = rule.density > 0f ? rule.density : 1f,
                         spacingVariation = 0f,
                         scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                        heightRange = new float2(rule.heightScaleRange.x, rule.heightScaleRange.y),
                         sink = rule.sink,
                         alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
                         randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),

@@ -778,17 +778,100 @@ namespace IslandSystem
             }
         }
 
-        /// <summary>Scatters each composed biome's ROCK rules (Rocks/) as GameObjects under a "Rocks" holder, keeping out of villages.</summary>
+        /// <summary>
+        /// Scatters the biomes' ROCK rules as GPU-INSTANCED rocks (like the trees/flowers — NO per-rock GameObject)
+        /// on a child "Rocks" renderer. Rocks are kept OFF the trees (tree-avoidance), aligned to the terrain
+        /// normal so they sit flush on the ground instead of floating, off villages/fade, within each rule's band.
+        /// </summary>
         public static void ScatterRocks(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
         {
             if (bands == null) return;
-            int bi = 0;
+
+            // Reuse the tree renderer for rocks on a child GO — but WITHOUT colliders / density-LOD / terrain
+            // occlusion. Replace any legacy GameObject "Rocks" holder from an older generation.
+            Transform holder = terrain.transform.Find("Rocks");
+            if (holder != null && holder.GetComponent<IslandTreeRenderer>() == null)
+            {
+                if (Application.isPlaying) Object.Destroy(holder.gameObject); else Object.DestroyImmediate(holder.gameObject);
+                holder = null;
+            }
+            IslandTreeRenderer rockRenderer;
+            if (holder == null)
+            {
+                var go = new GameObject("Rocks");
+                go.transform.SetParent(terrain.transform, false);
+                rockRenderer = go.AddComponent<IslandTreeRenderer>();
+            }
+            else rockRenderer = holder.GetComponent<IslandTreeRenderer>();
+            rockRenderer.generateColliders = false;
+            rockRenderer.terrainOcclusion = false;
+            rockRenderer.lodMinKeep = 1f;        // rocks are sparse — never thin them out with distance
+            rockRenderer.lodNear = 100000f;
+            rockRenderer.castShadows = true;
+            rockRenderer.BeginBuild();
+
+            // Flatten the rock rules into blittable arrays (nulls dropped).
+            var allPrefabs = new List<GameObject>();
+            var ruleList = new List<ScatterRuleB>();
+            int cap = 0, bi = 0;
             foreach (var band in bands)
             {
                 bi++;
-                if (band.biome == null || band.biome.rockRules == null || band.biome.rockRules.Count == 0) continue;
-                ScatterRuleList(terrain, band.biome.rockRules, seed + bi * 101, band.lo, band.hi, "Rocks", villages);
+                if (band.biome == null || band.biome.rockRules == null) continue;
+                int ruleIndex = 0;
+                foreach (var rule in band.biome.rockRules)
+                {
+                    ruleIndex++;
+                    if (rule == null || !rule.IsValid) continue;
+                    int start = allPrefabs.Count, kept = 0;
+                    foreach (var p in rule.prefabs) { if (p == null) continue; allPrefabs.Add(p); kept++; }
+                    if (kept == 0) continue;
+                    cap += Mathf.Max(0, rule.count);
+                    ruleList.Add(new ScatterRuleB
+                    {
+                        where = rule.where, bandLo = band.lo, bandHi = band.hi,
+                        count = rule.count,
+                        scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                        heightRange = new float2(rule.heightScaleRange.x, rule.heightScaleRange.y),
+                        sink = rule.sink,
+                        alignToNormal = 1,   // FORCE align to the terrain plane so rocks conform to the ground
+                        randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
+                        nonUniformScale = (byte)(rule.nonUniformScale ? 1 : 0),
+                        prefabStart = start, prefabCount = kept,
+                        weightStart = 0, weightCount = 0,
+                        seed = (uint)((seed + bi * 101) * 73856093 ^ ruleIndex * 19349663)
+                    });
+                }
             }
+            if (ruleList.Count == 0) { rockRenderer.Finish(); return; }
+
+            // Tree positions of THIS island → keep rocks off the trunks.
+            var treePosList = new List<Vector3>();
+            var treeRend = terrain.GetComponent<IslandTreeRenderer>();
+            if (treeRend != null) treeRend.CollectTreePositions(treePosList);
+            var treeArr = new NativeArray<float3>(treePosList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < treePosList.Count; i++) treeArr[i] = new float3(treePosList[i].x, treePosList[i].y, treePosList[i].z);
+
+            var hf = HeightField.FromTerrain(terrain, Allocator.TempJob);
+            var villageArr = BuildVillageArray(villages, Allocator.TempJob);
+            var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
+            var outList = new NativeList<ScatterInstance>(Mathf.Max(16, cap), Allocator.TempJob);
+
+            new RockScatterJob { hf = hf, rules = rulesArr, villages = villageArr, trees = treeArr, treeAvoid = 3f, outList = outList }
+                .Schedule().Complete();
+
+            for (int i = 0; i < outList.Length; i++)
+            {
+                var inst = outList[i];
+                var prefab = allPrefabs[inst.prefab];
+                if (prefab == null) continue;
+                rockRenderer.Add(prefab, (Vector3)inst.pos,
+                    new Quaternion(inst.rot.value.x, inst.rot.value.y, inst.rot.value.z, inst.rot.value.w),
+                    Vector3.Scale(prefab.transform.localScale, (Vector3)inst.scale));
+            }
+
+            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose(); treeArr.Dispose(); outList.Dispose();
+            rockRenderer.Finish();
         }
 
         /// <summary>
@@ -890,6 +973,7 @@ namespace IslandSystem
                         bandLo = band.lo, bandHi = band.hi,
                         density = density, spacingVariation = rule.spacingVariation,
                         scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                        heightRange = new float2(rule.heightScaleRange.x, rule.heightScaleRange.y),
                         sink = rule.sink,
                         alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
                         randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
@@ -926,7 +1010,7 @@ namespace IslandSystem
                 if (prefab == null) continue;
                 treeRenderer.Add(prefab, (Vector3)inst.pos,
                     new Quaternion(inst.rot.value.x, inst.rot.value.y, inst.rot.value.z, inst.rot.value.w),
-                    prefab.transform.localScale * inst.scale.x);
+                    Vector3.Scale(prefab.transform.localScale, (Vector3)inst.scale));   // full x/y/z (height varies)
             }
 
             hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose();
@@ -1008,6 +1092,7 @@ namespace IslandSystem
                     where = rule.where, bandLo = bandLo, bandHi = bandHi,
                     count = rule.count,
                     scaleRange = new float2(rule.scaleRange.x, rule.scaleRange.y),
+                    heightRange = new float2(rule.heightScaleRange.x, rule.heightScaleRange.y),
                     sink = rule.sink,
                     alignToNormal = (byte)(rule.alignToNormal ? 1 : 0),
                     randomYRotation = (byte)(rule.randomYRotation ? 1 : 0),
@@ -1022,9 +1107,10 @@ namespace IslandSystem
             var hf = HeightField.FromTerrain(terrain, Allocator.TempJob);
             var villageArr = BuildVillageArray(villages, Allocator.TempJob);
             var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
+            var noTrees = new NativeArray<float3>(0, Allocator.TempJob);   // props don't avoid trees
             var outList = new NativeList<ScatterInstance>(Mathf.Max(16, cap), Allocator.TempJob);
 
-            new RockScatterJob { hf = hf, rules = rulesArr, villages = villageArr, outList = outList }
+            new RockScatterJob { hf = hf, rules = rulesArr, villages = villageArr, trees = noTrees, treeAvoid = 0f, outList = outList }
                 .Schedule().Complete();
 
             // Instantiate the placements as GameObjects (colliders + SpawnCuller) on the main thread.
@@ -1062,7 +1148,7 @@ namespace IslandSystem
                 go.transform.localScale = Vector3.Scale(go.transform.localScale, (Vector3)inst.scale);
             }
 
-            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose(); outList.Dispose();
+            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose(); noTrees.Dispose(); outList.Dispose();
         }
 
         // ---- Villages -----------------------------------------------------

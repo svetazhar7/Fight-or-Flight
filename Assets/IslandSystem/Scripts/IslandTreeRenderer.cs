@@ -106,6 +106,13 @@ namespace IslandSystem
 
         public void Finish() => Rebuild();
 
+        /// <summary>Append every placed instance's world position (used by the rock scatter to keep rocks off trees).</summary>
+        public void CollectTreePositions(List<Vector3> into)
+        {
+            if (species == null || into == null) return;
+            foreach (var sp in species) if (sp != null && sp.positions != null) into.AddRange(sp.positions);
+        }
+
         // ---- rendering ----
 
         void OnEnable()

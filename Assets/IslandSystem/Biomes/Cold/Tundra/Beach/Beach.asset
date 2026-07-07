@@ -52,6 +52,7 @@ MonoBehaviour:
   islandFalloff: 2.5
   heightmapResolution: 513
   terrainSize: {x: 500, y: 150, z: 500}
+  texturePatchScale: 6
   textureLayers:
   - label: 
     terrainLayer: {fileID: 8574412962073106934, guid: 1b48ae9c4febcf4439c63192223bc09a, type: 2}
@@ -66,6 +67,7 @@ MonoBehaviour:
   spawnRules: []
   treeRules: []
   rockRules: []
+  flowerRules: []
   village:
     enabled: 0
     buildingPrefabs: []
@@ -84,3 +86,4 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
+  grassLayers: []

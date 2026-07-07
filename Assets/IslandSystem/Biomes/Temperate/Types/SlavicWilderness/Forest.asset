@@ -84,6 +84,7 @@ MonoBehaviour:
       heightBlend: 0
       slopeBlend: 0
     scaleRange: {x: 0, y: 0}
+    heightScaleRange: {x: 0.75, y: 1.35}
     randomYRotation: 1
     alignToNormal: 0
     sink: 0.05
@@ -106,6 +107,7 @@ MonoBehaviour:
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
+    heightScaleRange: {x: 0.85, y: 1.25}
     randomYRotation: 1
     alignToNormal: 0
     sink: 0.02
@@ -128,6 +130,7 @@ MonoBehaviour:
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
+    heightScaleRange: {x: 0.85, y: 1.25}
     randomYRotation: 1
     alignToNormal: 0
     sink: 0.02
@@ -150,6 +153,7 @@ MonoBehaviour:
       heightBlend: 0.08
       slopeBlend: 10
     scaleRange: {x: 0.8, y: 0.8}
+    heightScaleRange: {x: 0.85, y: 1.25}
     randomYRotation: 1
     alignToNormal: 0
     sink: 0.02

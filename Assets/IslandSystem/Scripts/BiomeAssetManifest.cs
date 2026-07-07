@@ -144,8 +144,11 @@ namespace IslandSystem
         public PlacementCondition where = PlacementCondition.Range(0.1f, 1f, 0f, 30f);
 
         [Header("Per-instance variation")]
-        [Tooltip("Uniform scale is randomized in this range.")]
+        [Tooltip("Uniform scale is randomized in this range (overall size).")]
         public Vector2 scaleRange = new Vector2(0.8f, 1.2f);
+        [Tooltip("EXTRA height (Y) spread multiplied on top of the uniform scale, so instances vary in HEIGHT " +
+                 "(tall vs short trees/plants/rocks), not just overall size. (1,1) = off. E.g. (0.7, 1.4).")]
+        public Vector2 heightScaleRange = new Vector2(1f, 1f);
         public bool randomYRotation = true;
         [Tooltip("Tilt the object to match the ground normal.")]
         public bool alignToNormal = false;

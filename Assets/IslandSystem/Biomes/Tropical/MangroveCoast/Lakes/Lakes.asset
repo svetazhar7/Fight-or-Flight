@@ -19,12 +19,6 @@ MonoBehaviour:
   elevationOrder: 0.12
   reliefStrength: 0.05
   debugColor: {r: 0.3, g: 0.62, b: 0.68, a: 1}
-  carves: 1
-  carvePattern: 0
-  carveDepth: 0.2
-  carveCoverage: 0.55
-  carveScale: 5
-  fillsWithWater: 1
   noiseSettings:
     frequency: 3
     amplitude: 1
@@ -58,5 +52,28 @@ MonoBehaviour:
   islandFalloff: 2.5
   heightmapResolution: 513
   terrainSize: {x: 500, y: 150, z: 500}
+  texturePatchScale: 6
   textureLayers: []
   spawnRules: []
+  treeRules: []
+  rockRules: []
+  flowerRules: []
+  village:
+    enabled: 0
+    buildingPrefabs: []
+    villageCount: 1
+    villageRadius: 45
+    blendRadius: 18
+    buildingsPerVillage: 8
+    minDistanceBetweenVillages: 220
+    minDistanceBetweenBuildings: 9
+    where:
+      minHeight: 0.12
+      maxHeight: 0.7
+      minSlope: 0
+      maxSlope: 14
+      heightBlend: 0.08
+      slopeBlend: 10
+    buildingScaleRange: {x: 1, y: 1}
+    randomYRotation: 1
+  grassLayers: []

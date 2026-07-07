@@ -94,6 +94,7 @@ namespace IslandSystem
         public float density, spacingVariation;   // trees / flowers
         public int count;                          // rocks
         public float2 scaleRange;
+        public float2 heightRange;                 // extra Y (height) multiplier range on top of scaleRange
         public float sink;
         public byte alignToNormal, randomYRotation, nonUniformScale;
         public int prefabStart, prefabCount;   // slice into the flattened prefab list
@@ -220,13 +221,14 @@ namespace IslandSystem
                     int global = rule.prefabStart + local;
                     float s = math.lerp(rule.scaleRange.x, rule.scaleRange.y, rng.NextFloat());
                     if (s <= 0f) s = 1f;
+                    float hy = math.lerp(rule.heightRange.x, rule.heightRange.y, rng.NextFloat());  // extra height spread
                     float pr = prefabRadius[global];
                     Register(wx, wz, math.max(sep * 0.5f, pr * s));
 
                     float3 pos = hf.origin + new float3(wx, hf.HWorld(u, v) - rule.sink, wz);
                     quaternion rot = rule.alignToNormal != 0 ? ScatterMath.AlignUp(hf.Normal(u, v)) : quaternion.identity;
                     if (rule.randomYRotation != 0) rot = math.mul(rot, quaternion.RotateY(rng.NextFloat() * 2f * math.PI));
-                    outList.Add(new ScatterInstance { pos = pos, rot = rot, scale = new float3(s), prefab = global });
+                    outList.Add(new ScatterInstance { pos = pos, rot = rot, scale = new float3(s, s * hy, s), prefab = global });
                 }
             }
         }
@@ -262,10 +264,13 @@ namespace IslandSystem
         public HeightField hf;
         [ReadOnly] public NativeArray<ScatterRuleB> rules;
         [ReadOnly] public NativeArray<float3> villages;
+        [ReadOnly] public NativeArray<float3> trees;   // world positions to keep clear of (empty = no avoidance)
+        public float treeAvoid;                        // world radius around each tree to skip
         public NativeList<ScatterInstance> outList;
 
         public void Execute()
         {
+            float avoid2 = treeAvoid * treeAvoid;
             for (int ri = 0; ri < rules.Length; ri++)
             {
                 ScatterRuleB rule = rules[ri];
@@ -280,6 +285,19 @@ namespace IslandSystem
                     if (h01 < ScatterMath.FadeThreshold || h01 < rule.bandLo || h01 > rule.bandHi) continue;
                     float slope = hf.SlopeDeg(u, v);
                     if (ScatterMath.ConditionWeight(rule.where, h01, slope) <= 0.001f) continue;
+
+                    // Keep rocks off trees: skip if within treeAvoid of any tree trunk.
+                    if (treeAvoid > 0f && trees.Length > 0)
+                    {
+                        float worldX = hf.origin.x + u * hf.sizeX, worldZ = hf.origin.z + v * hf.sizeZ;
+                        bool nearTree = false;
+                        for (int t = 0; t < trees.Length; t++)
+                        {
+                            float dx = trees[t].x - worldX, dz = trees[t].z - worldZ;
+                            if (dx * dx + dz * dz < avoid2) { nearTree = true; break; }
+                        }
+                        if (nearTree) continue;
+                    }
 
                     int local = rng.NextInt(rule.prefabCount);
                     int global = rule.prefabStart + local;
@@ -298,6 +316,7 @@ namespace IslandSystem
                         if (s <= 0f) s = 1f;
                         sc = new float3(s);
                     }
+                    sc.y *= math.lerp(rule.heightRange.x, rule.heightRange.y, rng.NextFloat());  // extra height spread
 
                     float3 pos = hf.origin + new float3(u * hf.sizeX, hf.HWorld(u, v) - rule.sink, v * hf.sizeZ);
                     outList.Add(new ScatterInstance { pos = pos, rot = rot, scale = sc, prefab = global });
@@ -364,11 +383,12 @@ namespace IslandSystem
                             int global = rule.prefabStart + local;
                             float s = math.lerp(rule.scaleRange.x, rule.scaleRange.y, rng.NextFloat());
                             if (s <= 0f) s = 1f;
+                            float hy = math.lerp(rule.heightRange.x, rule.heightRange.y, rng.NextFloat());  // extra height spread
 
                             float3 pos = hf.origin + new float3(wx, hf.HWorld(fu, fv) - rule.sink, wz);
                             quaternion rot = rule.alignToNormal != 0 ? ScatterMath.AlignUp(hf.Normal(fu, fv)) : quaternion.identity;
                             if (rule.randomYRotation != 0) rot = math.mul(rot, quaternion.RotateY(rng.NextFloat() * 2f * math.PI));
-                            outList.Add(new ScatterInstance { pos = pos, rot = rot, scale = new float3(s), prefab = global });
+                            outList.Add(new ScatterInstance { pos = pos, rot = rot, scale = new float3(s, s * hy, s), prefab = global });
                         }
                     }
                 }

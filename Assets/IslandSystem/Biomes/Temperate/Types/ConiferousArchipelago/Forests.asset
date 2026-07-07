@@ -86,6 +86,7 @@ MonoBehaviour:
       heightBlend: 0
       slopeBlend: 0
     scaleRange: {x: 0, y: 0}
+    heightScaleRange: {x: 0.75, y: 1.35}
     randomYRotation: 1
     alignToNormal: 0
     sink: 0.05
@@ -126,6 +127,9 @@ MonoBehaviour:
     dryBottomColor: {r: 0.52156866, g: 0.654902, b: 0.16862746, a: 1}
     dryTopColor: {r: 0.3764706, g: 0.6039216, b: 0.12941177, a: 1}
     variationScale: 0.7
+    pullGroundColor: 1
+    groundColorStrength: 0.7
+    groundColorHeight: 0.55
     windStrength: 0.13
     bendStrength: 1
     where:
