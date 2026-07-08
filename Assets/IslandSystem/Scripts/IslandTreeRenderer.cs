@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -45,6 +48,12 @@ namespace IslandSystem
         [Tooltip("Fraction of trees kept at/after lodFar (0.55 = 55%).")]
         [Range(0.05f, 1f)] public float lodMinKeep = 0.55f;
 
+        [Header("Impostors (far tree LOD)")]
+        [Tooltip("Beyond this distance (m) a tree draws as a cheap camera-facing IMPOSTOR billboard (baked from a " +
+                 "hemisphere of angles, so it looks right from the side AND from above) instead of its ~2000-tri " +
+                 "mesh — the big FPS win for aerial / deep-forest views. 0 disables impostors (mesh at all distances).")]
+        public float impostorDistance = 140f;
+
         [Header("Trunk colliders")]
         [Tooltip("Give tree trunks capsule colliders. Streamed/pooled around the player (physics only in Play) so " +
                  "there is no per-tree GameObject — only the handful of trees near you actually have a collider.")]
@@ -56,16 +65,38 @@ namespace IslandSystem
         [Tooltip("Safety cap on how many trunk colliders exist at once (nearest trees are prioritized).")]
         public int maxColliders = 200;
 
-        // Runtime draw data (rebuilt from the serialized species; not serialized itself).
+        // Runtime draw data (rebuilt from the serialized species; not serialized itself). Per-instance data lives
+        // in NativeArrays so the cull runs in a Burst job (TreeCullJob); `vis` is that job's output list, handed
+        // straight to RenderMeshInstanced.
         struct Batch
         {
             public Mesh mesh; public int submesh; public Material material;
-            public Matrix4x4[] matrices; public Vector3[] centers; public float[] rand;
-            public float radius; public float topOffset; public Bounds bounds; public Matrix4x4[] scratch;
+            public NativeArray<Matrix4x4> matrices; public NativeArray<float3> centers; public NativeArray<float> rand;
+            public float radius; public float topOffset; public Bounds bounds; public NativeList<Matrix4x4> vis;
         }
         readonly List<Batch> _batches = new List<Batch>();
         static readonly Plane[] _planes = new Plane[6];
         Terrain _terrain;
+
+        // ---- Burst cull scratch (persistent, disposed in OnDisable) ----
+        HeightField _hf;                       // native island height for the occlusion sight-line test
+        NativeArray<float4> _planesNA;         // 6 frustum planes, refilled per camera
+        NativeList<JobHandle> _cullHandles;    // one handle per batch scheduled this frame
+        readonly List<int> _scheduledBatches = new List<int>();
+
+        // ---- far-LOD impostors (one billboard set per species) ----
+        struct ImpostorSet
+        {
+            public GameObject prefab; public Material material;
+            public NativeArray<Matrix4x4> matrices;   // billboard TRS(base, identity, scale) per TREE
+            public NativeArray<float3> centers; public NativeArray<float> rand;
+            public float radius; public Bounds bounds; public NativeList<Matrix4x4> vis;
+        }
+        readonly List<ImpostorSet> _impostors = new List<ImpostorSet>();
+        readonly List<int> _scheduledImp = new List<int>();
+        static Mesh _quad;                                         // shared unit billboard quad (XY -0.5..0.5)
+        struct ImpostorBake { public Material material; public Vector3 size; public Vector3 center; }
+        static readonly Dictionary<GameObject, ImpostorBake> _bakeCache = new Dictionary<GameObject, ImpostorBake>();
 
         // ---- streamed trunk colliders (pooled, no per-tree GameObject) ----
         struct Trunk { public Vector3 basePos; public float height; public float radius; }
@@ -108,7 +139,7 @@ namespace IslandSystem
             sp.scales.Add(scale);
         }
 
-        public void Finish() => Rebuild();
+        public void Finish() { Rebuild(); TryBakeImpostors(); }   // bake at generation time (safe, outside rendering)
 
         /// <summary>Append every placed instance's world position (used by the rock scatter to keep rocks off trees).</summary>
         public void CollectTreePositions(List<Vector3> into)
@@ -138,12 +169,23 @@ namespace IslandSystem
                 _colliderHolder = null;
                 _colliderPool.Clear();
             }
+
+            // Release all Burst-cull native memory.
+            DisposeBatches();
+            _batches.Clear();
+            if (_planesNA.IsCreated) _planesNA.Dispose();
+            if (_cullHandles.IsCreated) _cullHandles.Dispose();
+            _hf.Dispose();
+            _hf = default;
+            _built = false;
         }
 
         // ---- trunk collider streaming ----
 
         void LateUpdate()
         {
+            // Bake impostor atlases here (outside camera rendering) if a domain reload / lazy rebuild left them missing.
+            if (_built && impostorDistance > 0.01f && !ImpostorsReady()) TryBakeImpostors();
             if (!Application.isPlaying || !generateColliders) return;
             var viewer = ViewerTransform();
             if (viewer != null) StreamColliders(viewer.position);
@@ -257,6 +299,7 @@ namespace IslandSystem
 
         void Rebuild()
         {
+            DisposeBatches();
             _batches.Clear();
             _trunks.Clear();
             _built = true;
@@ -308,25 +351,57 @@ namespace IslandSystem
                         // Tree foliage must never distance-fade like streamed flowers/bushes.
                         if (mat.HasProperty(UseFoliageFadeId)) mat.SetFloat(UseFoliageFadeId, 0f);
 
-                        var matrices = new Matrix4x4[n];
-                        var centers = new Vector3[n];
-                        var rand = new float[n];
+                        var matrices = new NativeArray<Matrix4x4>(n, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                        var centers = new NativeArray<float3>(n, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                        var rand = new NativeArray<float>(n, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
                         var b = new Bounds(sp.positions[0], Vector3.zero);
                         for (int i = 0; i < n; i++)
                         {
                             matrices[i] = Matrix4x4.TRS(sp.positions[i], sp.rotations[i], sp.scales[i]) * partLocal;
-                            centers[i] = sp.positions[i];
-                            rand[i] = Hash01((uint)i * 2654435761u ^ (uint)s);
-                            b.Encapsulate(sp.positions[i]);
+                            Vector3 p = sp.positions[i];
+                            centers[i] = new float3(p.x, p.y, p.z);
+                            rand[i] = Hash01((uint)i * 2654435761u);   // per-TREE (shared by all submeshes + the impostor)
+                            b.Encapsulate(p);
                         }
                         b.Expand(radius * 2f);
                         _batches.Add(new Batch
                         {
                             mesh = mesh, submesh = s, material = mat,
                             matrices = matrices, centers = centers, rand = rand,
-                            radius = radius, topOffset = topOffset, bounds = b, scratch = new Matrix4x4[n]
+                            radius = radius, topOffset = topOffset, bounds = b,
+                            vis = new NativeList<Matrix4x4>(n, Allocator.Persistent)
                         });
                     }
+                }
+
+                // Far-LOD impostor set for this species (one billboard per TREE; atlas material baked lazily).
+                if (impostorDistance > 0.01f)
+                {
+                    _bakeCache.TryGetValue(sp.prefab, out var bake);
+                    int nt = sp.positions.Count;
+                    var im = new NativeArray<Matrix4x4>(nt, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                    var ic = new NativeArray<float3>(nt, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                    var ir = new NativeArray<float>(nt, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                    var ib = new Bounds(sp.positions[0], Vector3.zero);
+                    float maxS = 0f;
+                    for (int i = 0; i < nt; i++)
+                    {
+                        Vector3 p = sp.positions[i], sc = sp.scales[i];
+                        im[i] = Matrix4x4.TRS(p, Quaternion.identity, sc);
+                        ic[i] = new float3(p.x, p.y, p.z);
+                        ir[i] = Hash01((uint)i * 2654435761u);
+                        ib.Encapsulate(p);
+                        maxS = Mathf.Max(maxS, sc.x, sc.y, sc.z);
+                    }
+                    float irad = Mathf.Max(bake.size.x, Mathf.Max(bake.size.y, bake.size.z)) * Mathf.Max(0.01f, maxS) + 1f;
+                    if (irad < 2f) irad = 30f;   // size unknown until the atlas is baked; use a generous cull bound
+                    ib.Expand(irad * 2f);
+                    _impostors.Add(new ImpostorSet
+                    {
+                        prefab = sp.prefab, material = bake.material,
+                        matrices = im, centers = ic, rand = ir, radius = irad, bounds = ib,
+                        vis = new NativeList<Matrix4x4>(nt, Allocator.Persistent)
+                    });
                 }
             }
         }
@@ -334,45 +409,92 @@ namespace IslandSystem
         void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
             if (cam.cameraType != CameraType.Game && cam.cameraType != CameraType.SceneView) return;
+            // Skip cameras that don't even render the Foliage layer (e.g. the water's planar-reflection camera) —
+            // no point culling trees they'll discard by layer mask anyway.
+            if (FoliageLayer >= 0 && (cam.cullingMask & (1 << FoliageLayer)) == 0) return;
             if (!_built) Rebuild();          // lazy build once serialized species are guaranteed present
-            if (_batches.Count == 0) return;
+            if (_batches.Count == 0 && _impostors.Count == 0) return;
+
+            if (_terrain == null) _terrain = GetComponent<Terrain>();
+            EnsureCullNative();
 
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
+            for (int p = 0; p < 6; p++)
+            {
+                Vector3 nrm = _planes[p].normal;
+                _planesNA[p] = new float4(nrm.x, nrm.y, nrm.z, _planes[p].distance);
+            }
+
             Vector3 camPos = cam.transform.position;
+            var camPosF = new float3(camPos.x, camPos.y, camPos.z);
             var shadow = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
-            float near2 = lodNear * lodNear;
             float span = Mathf.Max(1f, lodFar - lodNear);
-            if (_terrain == null) _terrain = GetComponent<Terrain>();
-            bool doOcclusion = terrainOcclusion && _terrain != null;
+            float near2 = lodNear * lodNear;
             float occlMin2 = occlusionMinDistance * occlusionMinDistance;
-            float terrainBaseY = _terrain != null ? _terrain.transform.position.y : 0f;
+            int doOcclusion = (terrainOcclusion && _hf.IsCreated) ? 1 : 0;
+
+            // MESH renders NEAR, IMPOSTORS render FAR. Split at impostorDistance (once ready); until the atlases are
+            // baked, mesh renders everything so nothing disappears.
+            bool impOn = ImpostorsReady();
+            float imp2 = impostorDistance * impostorDistance;
+            float meshMax = impOn ? imp2 : float.MaxValue;
+
+            // Schedule all cull jobs (mesh + impostor) then wait ONCE — the ~34k-instance work runs on worker threads.
+            _scheduledBatches.Clear();
+            _scheduledImp.Clear();
+            _cullHandles.Clear();
 
             for (int bi = 0; bi < _batches.Count; bi++)
             {
                 var b = _batches[bi];
-                if (b.mesh == null || b.material == null) continue;
-                // Whole-batch reject if the island's tree cloud is entirely off-screen.
-                if (!GeometryUtility.TestPlanesAABB(_planes, b.bounds)) continue;
+                if (b.mesh == null || b.material == null || !b.matrices.IsCreated) continue;
+                if (!GeometryUtility.TestPlanesAABB(_planes, b.bounds)) continue;   // whole island cloud off-screen
 
-                int vis = 0;
-                for (int i = 0; i < b.matrices.Length; i++)
+                b.vis.Clear();
+                var job = new TreeCullJob
                 {
-                    Vector3 c = b.centers[i];
-                    if (!InFrustum(c, b.radius)) continue;                       // per-instance frustum cull
+                    matrices = b.matrices, centers = b.centers, rand = b.rand, planes = _planesNA,
+                    camPos = camPosF, radius = b.radius, topOffset = b.topOffset,
+                    lodNear = lodNear, span = span, lodMinKeep = lodMinKeep, near2 = near2,
+                    minDist2 = 0f, maxDist2 = meshMax,
+                    doOcclusion = doOcclusion, occlMin2 = occlMin2, occlusionBias = occlusionBias, hf = _hf,
+                    outList = b.vis.AsParallelWriter()
+                };
+                _cullHandles.Add(job.Schedule(b.matrices.Length, 64));
+                _scheduledBatches.Add(bi);
+            }
 
-                    float dx = c.x - camPos.x, dz = c.z - camPos.z;
-                    float d2 = dx * dx + dz * dz;
-                    if (d2 > near2)                                              // distance density LOD
+            if (impOn)
+            {
+                for (int ii = 0; ii < _impostors.Count; ii++)
+                {
+                    var im = _impostors[ii];
+                    if (im.material == null || !im.matrices.IsCreated) continue;
+                    if (!GeometryUtility.TestPlanesAABB(_planes, im.bounds)) continue;
+
+                    im.vis.Clear();
+                    var job = new TreeCullJob
                     {
-                        float t = Mathf.Clamp01((Mathf.Sqrt(d2) - lodNear) / span);
-                        float keep = Mathf.Lerp(1f, lodMinKeep, t);
-                        if (b.rand[i] > keep) continue;
-                    }
-                    // Terrain occlusion: skip trees the island's own hill hides (far slope behind the peak).
-                    if (doOcclusion && d2 > occlMin2 && Occluded(camPos, c, b.topOffset, terrainBaseY)) continue;
-
-                    b.scratch[vis++] = b.matrices[i];
+                        matrices = im.matrices, centers = im.centers, rand = im.rand, planes = _planesNA,
+                        camPos = camPosF, radius = im.radius, topOffset = 0f,
+                        lodNear = lodNear, span = span, lodMinKeep = lodMinKeep, near2 = near2,
+                        minDist2 = imp2, maxDist2 = float.MaxValue,
+                        doOcclusion = doOcclusion, occlMin2 = occlMin2, occlusionBias = occlusionBias, hf = _hf,
+                        outList = im.vis.AsParallelWriter()
+                    };
+                    _cullHandles.Add(job.Schedule(im.matrices.Length, 64));
+                    _scheduledImp.Add(ii);
                 }
+            }
+
+            if (_cullHandles.Length == 0) { if (!impOn) RequestEditorTick(); return; }
+            JobHandle.CompleteAll(_cullHandles.AsArray());
+
+            // draw near meshes
+            for (int si = 0; si < _scheduledBatches.Count; si++)
+            {
+                var b = _batches[_scheduledBatches[si]];
+                int vis = b.vis.Length;
                 if (vis == 0) continue;
 
                 var rp = new RenderParams(b.material)
@@ -381,36 +503,118 @@ namespace IslandSystem
                     shadowCastingMode = shadow, receiveShadows = true,
                     layer = FoliageLayer >= 0 ? FoliageLayer : 0
                 };
+                var arr = b.vis.AsArray();
                 for (int start = 0; start < vis; start += 1023)
-                    Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, b.scratch, Mathf.Min(1023, vis - start), start);
+                    Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, arr, Mathf.Min(1023, vis - start), start);
             }
+
+            // draw far impostor billboards
+            if (_scheduledImp.Count > 0)
+            {
+                var quad = Quad();
+                for (int si = 0; si < _scheduledImp.Count; si++)
+                {
+                    var im = _impostors[_scheduledImp[si]];
+                    int vis = im.vis.Length;
+                    if (vis == 0) continue;
+
+                    var rp = new RenderParams(im.material)
+                    {
+                        camera = cam, worldBounds = im.bounds,
+                        shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false,
+                        layer = FoliageLayer >= 0 ? FoliageLayer : 0
+                    };
+                    var arr = im.vis.AsArray();
+                    for (int start = 0; start < vis; start += 1023)
+                        Graphics.RenderMeshInstanced(rp, quad, 0, arr, Mathf.Min(1023, vis - start), start);
+                }
+            }
+
+            if (!impOn) RequestEditorTick();
         }
 
-        static bool InFrustum(Vector3 center, float radius)
+        /// <summary>Allocate the persistent Burst-cull scratch (frustum planes, job handles, occlusion HeightField).</summary>
+        void EnsureCullNative()
         {
-            for (int p = 0; p < 6; p++)
-                if (_planes[p].GetDistanceToPoint(center) < -radius) return false;
+            if (!_planesNA.IsCreated) _planesNA = new NativeArray<float4>(6, Allocator.Persistent);
+            if (!_cullHandles.IsCreated) _cullHandles = new NativeList<JobHandle>(8, Allocator.Persistent);
+            // The island heightfield is only needed for occlusion (~1 MB) — build it lazily, and only when on.
+            if (terrainOcclusion && !_hf.IsCreated && _terrain != null)
+                _hf = HeightField.FromTerrain(_terrain, Allocator.Persistent);
+        }
+
+        void DisposeBatches()
+        {
+            for (int i = 0; i < _batches.Count; i++)
+            {
+                var b = _batches[i];
+                if (b.matrices.IsCreated) b.matrices.Dispose();
+                if (b.centers.IsCreated) b.centers.Dispose();
+                if (b.rand.IsCreated) b.rand.Dispose();
+                if (b.vis.IsCreated) b.vis.Dispose();
+            }
+            for (int i = 0; i < _impostors.Count; i++)
+            {
+                var im = _impostors[i];
+                if (im.matrices.IsCreated) im.matrices.Dispose();
+                if (im.centers.IsCreated) im.centers.Dispose();
+                if (im.rand.IsCreated) im.rand.Dispose();
+                if (im.vis.IsCreated) im.vis.Dispose();
+            }
+            _impostors.Clear();
+        }
+
+        static Mesh Quad()
+        {
+            if (_quad != null) return _quad;
+            _quad = new Mesh { name = "ImpostorQuad" };
+            _quad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0), new Vector3(0.5f, -0.5f, 0), new Vector3(0.5f, 0.5f, 0), new Vector3(-0.5f, 0.5f, 0) };
+            _quad.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) };
+            _quad.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+            _quad.RecalculateBounds();
+            return _quad;
+        }
+
+        /// <summary>True once every species' impostor atlas material is baked and ready to draw.</summary>
+        bool ImpostorsReady()
+        {
+            if (impostorDistance <= 0.01f || _impostors.Count == 0) return false;
+            for (int i = 0; i < _impostors.Count; i++) if (_impostors[i].material == null) return false;
             return true;
         }
 
-        /// <summary>
-        /// Cheap terrain occlusion: sample the island height at a few points between the camera and the tree.
-        /// If a ridge rises above the straight line from the camera EYE to the tree's CANOPY top, the tree is
-        /// hidden behind the hill and can be skipped. Aiming the sight-line at the canopy (base + topOffset)
-        /// keeps trees whose crowns peek over the ridge. 3 samples ≈ enough for a single-hill island.
-        /// </summary>
-        bool Occluded(Vector3 cam, Vector3 tree, float canopy, float terrainBaseY)
+        /// <summary>Bake any missing impostor atlases. MUST run outside camera rendering (LateUpdate / Finish) —
+        /// the baker submits render requests, which can't nest inside beginCameraRendering. Atlases are cached per
+        /// prefab (static), so it's ~one bake per species per domain load, shared across all island renderers.</summary>
+        void TryBakeImpostors()
         {
-            float targetY = tree.y + canopy;
-            // Sample nearer the tree first (that's where the blocking peak usually is on the far slope).
-            for (float t = 0.75f; t > 0.25f; t -= 0.25f)   // 0.75, 0.50, 0.25
+            if (impostorDistance <= 0.01f) return;
+            for (int i = 0; i < _impostors.Count; i++)
             {
-                Vector3 s = Vector3.Lerp(cam, tree, t);
-                float ground = _terrain.SampleHeight(s) + terrainBaseY;
-                float sight = Mathf.Lerp(cam.y, targetY, t);
-                if (ground > sight + occlusionBias) return true;
+                var im = _impostors[i];
+                if (im.material != null || im.prefab == null) continue;
+                if (!_bakeCache.TryGetValue(im.prefab, out var bake) || bake.material == null)
+                {
+                    var res = TreeImpostorBaker.Bake(im.prefab, 8, 128);
+                    var mat = new Material(Shader.Find("IslandSystem/Impostor"));
+                    mat.SetTexture("_Atlas", res.atlas);
+                    mat.SetFloat("_Grid", res.grid);
+                    mat.SetVector("_Size", res.boundsSize);
+                    mat.SetVector("_CenterLocal", res.centerLocal);
+                    mat.enableInstancing = true;
+                    bake = new ImpostorBake { material = mat, size = res.boundsSize, center = res.centerLocal };
+                    _bakeCache[im.prefab] = bake;
+                }
+                im.material = bake.material;
+                _impostors[i] = im;
             }
-            return false;
+        }
+
+        void RequestEditorTick()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying) UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+#endif
         }
 
         static float Hash01(uint x)

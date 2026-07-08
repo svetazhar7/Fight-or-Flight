@@ -7,7 +7,8 @@ namespace IslandSystem
     /// <summary>
     /// Draws an island's ROCKS with GPU instancing (Graphics.RenderMeshInstanced) — no per-rock GameObject and no
     /// colliders. Lives as a COMPONENT on the terrain GameObject (so there is no "Rocks" child cluttering the
-    /// hierarchy). Per-instance frustum culling only — rocks are sparse, so no density LOD / terrain occlusion.
+    /// hierarchy). Per-instance frustum culling + DISTANCE STREAMING (only rocks within <see cref="viewDistance"/>
+    /// of the viewer render, shrinking in on approach like the grass/flowers/bushes) — no density LOD / occlusion.
     /// Placement is filled by <see cref="IslandTerrainGenerator.ScatterRocks"/>; drawn on the Foliage layer so the
     /// water's planar reflection can exclude it. Serialized so it survives domain reloads / scene save.
     /// </summary>
@@ -25,6 +26,13 @@ namespace IslandSystem
 
         [SerializeField] List<Species> species = new List<Species>();
         public bool castShadows = true;
+
+        [Tooltip("Rocks only render within this radius of the viewer (m) — like the streamed grass/flowers/bushes. " +
+                 "They shrink into the ground across the outer part of this range so they dissolve in as you approach " +
+                 "instead of popping. 0 or less = always draw (no distance streaming).")]
+        public float viewDistance = 130f;
+        [Tooltip("Fraction of viewDistance where rocks are still full size; past it they shrink to nothing by viewDistance.")]
+        [Range(0.1f, 0.95f)] public float fadeStartFraction = 0.55f;
 
         struct Batch
         {
@@ -120,6 +128,15 @@ namespace IslandSystem
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
             var shadow = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
 
+            // Streaming distance (like grass/flowers): only rocks within viewDistance of the viewer draw, and they
+            // shrink into the ground across [fadeStart..viewDistance] so they dissolve in on approach, no pop.
+            Vector3 camPos = cam.transform.position;
+            bool stream = viewDistance > 0.01f;
+            float vd2 = viewDistance * viewDistance;
+            float fadeStart = viewDistance * fadeStartFraction;
+            float fadeStart2 = fadeStart * fadeStart;
+            float fadeSpan = Mathf.Max(0.01f, viewDistance - fadeStart);
+
             for (int bi = 0; bi < _batches.Count; bi++)
             {
                 var b = _batches[bi];
@@ -128,7 +145,26 @@ namespace IslandSystem
 
                 int vis = 0;
                 for (int i = 0; i < b.matrices.Length; i++)
-                    if (InFrustum(b.centers[i], b.radius)) b.scratch[vis++] = b.matrices[i];
+                {
+                    Vector3 c = b.centers[i];
+                    if (!InFrustum(c, b.radius)) continue;
+
+                    if (stream)
+                    {
+                        float dx = c.x - camPos.x, dz = c.z - camPos.z;
+                        float d2 = dx * dx + dz * dz;
+                        if (d2 > vd2) continue;                       // too far — not rendered
+                        if (d2 > fadeStart2)
+                        {
+                            // shrink toward the ground pivot (c) so the rock dissolves in with distance
+                            float f = Mathf.Clamp01(1f - (Mathf.Sqrt(d2) - fadeStart) / fadeSpan);
+                            b.scratch[vis++] = Matrix4x4.Translate(c) * Matrix4x4.Scale(new Vector3(f, f, f))
+                                             * Matrix4x4.Translate(-c) * b.matrices[i];
+                            continue;
+                        }
+                    }
+                    b.scratch[vis++] = b.matrices[i];
+                }
                 if (vis == 0) continue;
 
                 var rp = new RenderParams(b.material)
