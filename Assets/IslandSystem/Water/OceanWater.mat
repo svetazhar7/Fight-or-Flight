@@ -80,8 +80,8 @@ Material:
     - _NormalScale2: 1
     - _NormalSlidingSpeed1: 1
     - _NormalSlidingSpeed2: 1
-    - _PoseidonSineTime: -0.3208575
-    - _PoseidonTime: 3021.8855
+    - _PoseidonSineTime: 0.8784487
+    - _PoseidonTime: 2.0689867
     - _QueueControl: 0
     - _QueueOffset: 0
     - _RefractionDistortionStrength: 0
