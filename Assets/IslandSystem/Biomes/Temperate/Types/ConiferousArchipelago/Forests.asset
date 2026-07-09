@@ -17,6 +17,7 @@ MonoBehaviour:
   islandType: 23
   displayName: "\u041B\u0435\u0441\u0430"
   elevationOrder: 0.15
+  isLakeBiome: 0
   reliefStrength: 0.05
   debugColor: {r: 0.22, g: 0.42, b: 0.26, a: 1}
   noiseSettings:
@@ -55,7 +56,7 @@ MonoBehaviour:
   texturePatchScale: 6
   textureLayers:
   - label: Forest floor
-    terrainLayer: {fileID: 8574412962073106934, guid: 42de20769bde1244a9b26a508bf730be, type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 092e1bf30d1188a469f17fbe9a9b2578, type: 2}
     where:
       minHeight: 0
       maxHeight: 1
@@ -70,11 +71,13 @@ MonoBehaviour:
     prefabs:
     - {fileID: 919132149155446097, guid: 8ed5eeb402ad4f142a3716d2fb9d8190, type: 3}
     - {fileID: 919132149155446097, guid: 15acd9e62fb7a714092ffc75c0226982, type: 3}
-    - {fileID: 919132149155446097, guid: 567a09bcd9652064fadcf8cfd62265fe, type: 3}
+    - {fileID: 919132149155446097, guid: beb29e8f57e956e48a2760c2bae90073, type: 3}
+    - {fileID: 919132149155446097, guid: 66525bc56007ce348a922e8bb8c9abdd, type: 3}
     prefabWeights:
     - 1
     - 1
-    - 2
+    - 1
+    - 1
     count: 0
     density: 0
     spacingVariation: 0
@@ -91,10 +94,35 @@ MonoBehaviour:
     alignToNormal: 0
     sink: 0.05
     nonUniformScale: 0
-  rockRules: []
+  rockRules:
+  - label: rocks
+    prefabs:
+    - {fileID: 919132149155446097, guid: 1c29f742452992149977300cec6a07ef, type: 3}
+    - {fileID: 919132149155446097, guid: 3b0e1b015d839564e8013a893a00cb3d, type: 3}
+    - {fileID: 919132149155446097, guid: 6ff50fd5214985b4fbaf9c6ed7268bef, type: 3}
+    prefabWeights:
+    - 1
+    - 5
+    - 5
+    count: 5000
+    density: 0
+    spacingVariation: 0.05
+    where:
+      minHeight: 0
+      maxHeight: 0
+      minSlope: 0
+      maxSlope: 0
+      heightBlend: 0
+      slopeBlend: 0
+    scaleRange: {x: 0, y: 0}
+    heightScaleRange: {x: 0.7, y: 1.4}
+    randomYRotation: 1
+    alignToNormal: 0
+    sink: 0.05
+    nonUniformScale: 0
   flowerRules: []
   village:
-    enabled: 1
+    enabled: 0
     buildingPrefabs:
     - {fileID: 2763672626335216884, guid: faa232351140d09468c55b9d5a0ec242, type: 3}
     villageCount: 1
@@ -112,6 +140,14 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
+  clearings:
+    enabled: 0
+    count: 6
+    minRadius: 14
+    maxRadius: 26
+    irregularity: 0.6
+    edgeFeather: 14
+    minSpacing: 40
   grassLayers:
   - enabled: 1
     name: forest grass
@@ -120,16 +156,16 @@ MonoBehaviour:
     prefabScaleRange: {x: 1.5, y: 1.5}
     layFlat: 0
     alphaCutoff: 0.5
-    bottomColor: {r: 0.34154677, g: 0.5754717, b: 0.16015486, a: 1}
-    topColor: {r: 0.43432876, g: 0.6132076, b: 0.17644179, a: 1}
+    bottomColor: {r: 0.36078432, g: 0.4784314, b: 0.30588236, a: 1}
+    topColor: {r: 0.17254902, g: 0.25490198, b: 0.17254902, a: 1}
     textureTiles: 2
     colorVariation: 0.5
-    dryBottomColor: {r: 0.52156866, g: 0.654902, b: 0.16862746, a: 1}
-    dryTopColor: {r: 0.3764706, g: 0.6039216, b: 0.12941177, a: 1}
+    dryBottomColor: {r: 0.24705884, g: 0.3921569, b: 0.3019608, a: 1}
+    dryTopColor: {r: 0.07058824, g: 0.15294118, b: 0.078431375, a: 1}
     variationScale: 0.7
-    pullGroundColor: 1
-    groundColorStrength: 0.7
-    groundColorHeight: 0.55
+    pullGroundColor: 0
+    groundColorStrength: 1
+    groundColorHeight: 0.85
     windStrength: 0.13
     bendStrength: 1
     where:

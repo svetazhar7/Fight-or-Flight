@@ -17,6 +17,7 @@ MonoBehaviour:
   islandType: 23
   displayName: "\u041F\u043B\u044F\u0436"
   elevationOrder: 0.05
+  isLakeBiome: 0
   reliefStrength: 0.1
   debugColor: {r: 0.86, g: 0.8, b: 0.62, a: 1}
   noiseSettings:
@@ -55,7 +56,7 @@ MonoBehaviour:
   texturePatchScale: 6
   textureLayers:
   - label: Beach gravel
-    terrainLayer: {fileID: 8574412962073106934, guid: ebfe39da7775ea24aa6cfacdcc8b4055, type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 4f248650142309e4385cee2f7f139115, type: 2}
     where:
       minHeight: 0
       maxHeight: 1

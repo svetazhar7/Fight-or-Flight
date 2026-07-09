@@ -20,6 +20,26 @@ namespace IslandSystem
     /// honoured by laying out biomes in elevation bands sized by their share of the island's land area
     /// (ordered by each biome's <see cref="BiomeAssetManifest.elevationOrder"/>).
     /// </summary>
+    /// <summary>
+    /// ARCHIPELAGO fragmentation: carves ocean channels straight THROUGH an island so one landmass reads as a
+    /// cluster of smaller islands separated by water (the tropical look). The channels follow the iso-contours of a
+    /// low-frequency noise field — guaranteed to cross the land — and are cut down to a sub-sea floor, so the
+    /// EXISTING ocean simply floods them (no separate lake water). Fully deterministic from the island seed
+    /// (multiplayer-safe). Set <see cref="channels"/> to 0 to leave the island solid.
+    /// </summary>
+    [Serializable]
+    public class ArchipelagoSettings
+    {
+        [Tooltip("Number of ocean channels cut through the island. 0 = a single solid island (no fragmentation).")]
+        [Range(0, 4)] public int channels = 0;
+        [Tooltip("Channel WIDTH (as a fraction of the noise field). Wider = broad lagoons between big islands; " +
+                 "thinner = narrow straits.")]
+        [Range(0.02f, 0.16f)] public float channelWidth = 0.08f;
+        [Tooltip("How deep the channels are cut below sea level (world units). Deeper reads as more fully-separated " +
+                 "islands; shallower leaves sandy tidal flats between them.")]
+        [Range(2f, 25f)] public float channelDepth = 8f;
+    }
+
     [CreateAssetMenu(fileName = "IslandType", menuName = "IslandSystem/Island Type Definition")]
     public class IslandTypeDefinition : ScriptableObject
     {
@@ -55,6 +75,13 @@ namespace IslandSystem
         [Range(0f, 1f)] public float plainsFlatten = 0.85f;
         [Tooltip("Subtle roughness kept everywhere (incl. plains) so flat ground isn't glassy (normalized).")]
         [Range(0f, 0.05f)] public float microRoughness = 0.005f;
+        [Tooltip("Whole-island SMOOTHING pass after relief (0 = none). Softens sharp ridges and abrupt slopes for " +
+                 "a gentler look — blends the heightmap toward a blurred copy by this amount. ~0.3–0.5 is a natural soften.")]
+        [Range(0f, 1f)] public float terrainSmoothing = 0f;
+        [Header("Archipelago fragmentation (tropical multi-island look)")]
+        [Tooltip("Cuts ocean channels through the island so it reads as several separate islands. Set channels = 0 " +
+                 "to keep a single solid island. See ArchipelagoSettings for the per-channel knobs.")]
+        public ArchipelagoSettings archipelago = new ArchipelagoSettings();
 
         [Header("Composition — biomes by % (sums to 100)")]
         public List<WeightedBiome> biomes = new List<WeightedBiome>();

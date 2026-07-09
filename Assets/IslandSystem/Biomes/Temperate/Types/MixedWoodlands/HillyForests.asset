@@ -17,6 +17,7 @@ MonoBehaviour:
   islandType: 24
   displayName: "\u0425\u043E\u043B\u043C\u0438\u0441\u0442\u044B\u0435 \u043B\u0435\u0441\u0430"
   elevationOrder: 0.3
+  isLakeBiome: 0
   reliefStrength: 0.1
   debugColor: {r: 0.3, g: 0.5, b: 0.32, a: 1}
   noiseSettings:
@@ -188,6 +189,14 @@ MonoBehaviour:
       slopeBlend: 10
     buildingScaleRange: {x: 1, y: 1}
     randomYRotation: 1
+  clearings:
+    enabled: 0
+    count: 6
+    minRadius: 14
+    maxRadius: 26
+    irregularity: 0.6
+    edgeFeather: 14
+    minSpacing: 40
   grassLayers:
   - enabled: 1
     name: forest grass
@@ -204,8 +213,8 @@ MonoBehaviour:
     dryTopColor: {r: 0.4901961, g: 0.77647066, b: 0.34901962, a: 1}
     variationScale: 0.7
     pullGroundColor: 1
-    groundColorStrength: 0.7
-    groundColorHeight: 0.55
+    groundColorStrength: 1
+    groundColorHeight: 0.85
     windStrength: 0.13
     bendStrength: 1
     where:

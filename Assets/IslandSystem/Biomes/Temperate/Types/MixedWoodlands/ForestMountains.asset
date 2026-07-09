@@ -154,8 +154,8 @@ MonoBehaviour:
     dryTopColor: {r: 0.4901961, g: 0.77647066, b: 0.34901962, a: 1}
     variationScale: 0.7
     pullGroundColor: 1
-    groundColorStrength: 0.7
-    groundColorHeight: 0.55
+    groundColorStrength: 1
+    groundColorHeight: 0.85
     windStrength: 0.13
     bendStrength: 1
     where:

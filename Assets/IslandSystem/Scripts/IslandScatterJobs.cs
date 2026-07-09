@@ -145,6 +145,25 @@ namespace IslandSystem
             return false;
         }
 
+        /// <summary>Tree KEEP probability for a SOFT clearing set: 0 inside a clearing core, ramping to 1 across its
+        /// feather band, so the treeline thins gradually into the opening instead of a hard circular wall.
+        /// clearings: xy = centre UV, z = core radius, w = feather width (world units). Returns the MIN over all.</summary>
+        public static float ClearingKeep(float u, float v, float sizeX, float sizeZ, in NativeArray<float4> clearings)
+        {
+            float lx = u * sizeX, lz = v * sizeZ;
+            float keep = 1f;
+            for (int i = 0; i < clearings.Length; i++)
+            {
+                float4 c = clearings[i];
+                float dx = lx - c.x * sizeX, dz = lz - c.y * sizeZ;
+                float d = math.sqrt(dx * dx + dz * dz);
+                float k = math.smoothstep(0f, 1f, (d - c.z) / math.max(0.001f, c.w));  // 0 in core → 1 past feather
+                keep = math.min(keep, k);
+                if (keep <= 0f) return 0f;
+            }
+            return keep;
+        }
+
         public static int PickWeighted(ref Random rng, in NativeArray<float> weights, int wStart, int wCount, int prefabCount)
         {
             if (prefabCount <= 1) return 0;
@@ -186,6 +205,7 @@ namespace IslandSystem
         [ReadOnly] public NativeArray<float> weights;
         [ReadOnly] public NativeArray<float> prefabRadius;   // per flattened prefab
         [ReadOnly] public NativeArray<float3> villages;
+        [ReadOnly] public NativeArray<float4> clearings;      // xy centre UV, z core radius, w feather (world) — SOFT tree thinning
         public float cell;
         public float pack;
         public NativeParallelMultiHashMap<int2, float3> occ;   // cell -> (worldX, worldZ, radius)
@@ -208,6 +228,9 @@ namespace IslandSystem
                 {
                     float u = rng.NextFloat(), v = rng.NextFloat();
                     if (ScatterMath.InAnyVillage(u, v, hf.sizeX, hf.sizeZ, villages)) continue;
+                    // Soft clearings: reject with rising probability toward the opening → a feathered treeline.
+                    float keep = ScatterMath.ClearingKeep(u, v, hf.sizeX, hf.sizeZ, clearings);
+                    if (keep < 1f && rng.NextFloat() > keep) continue;
                     float h01 = hf.H01(u, v);
                     if (h01 < ScatterMath.FadeThreshold || h01 < rule.bandLo || h01 > rule.bandHi) continue;
                     float slope = hf.SlopeDeg(u, v);

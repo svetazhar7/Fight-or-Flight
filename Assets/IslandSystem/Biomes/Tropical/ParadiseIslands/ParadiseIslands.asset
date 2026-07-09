@@ -47,13 +47,24 @@ MonoBehaviour:
     m_RotationOrder: 4
   islandFalloff: 2
   heightmapResolution: 513
-  terrainSize: {x: 520, y: 130, z: 520}
+  terrainSize: {x: 520, y: 70, z: 520}
+  mountainRelief: 0.15
+  reliefFrequency: 7
+  reliefOctaves: 4
+  erosionStrength: 0.45
+  plainsFlatten: 0.9
+  microRoughness: 0.005
+  terrainSmoothing: 0.5
+  archipelago:
+    channels: 2
+    channelWidth: 0.08
+    channelDepth: 9
   biomes:
   - biome: {fileID: 11400000, guid: dbeea4736e5220b45b5ea3362236ffae, type: 2}
-    percent: 10
+    percent: 30
   - biome: {fileID: 11400000, guid: 450d8accfaed1d042a486d17deff5fc8, type: 2}
     percent: 5
   - biome: {fileID: 11400000, guid: d717e67e56a37104ea1f332d0b237d1f, type: 2}
     percent: 45
   - biome: {fileID: 11400000, guid: 02cc109d3fd6bcd459763743af0ce119, type: 2}
-    percent: 40
+    percent: 20

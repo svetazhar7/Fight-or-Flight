@@ -34,6 +34,18 @@ namespace IslandSystem
             public float smoothedHeight;  // local Y of the levelled ground (= normalized * size.y)
         }
 
+        /// <summary>A carved lake: a smoothed bowl in the heightmap filled by a water disc at <see cref="waterLevelNormalized"/>
+        /// (which CAN be above the sea). Serializable so <see cref="IslandMarker"/> can persist it for runtime systems.</summary>
+        [System.Serializable]
+        public struct LakeZone
+        {
+            public Vector2 centerUV;            // normalized tile coords of the lake centre
+            public float radiusWorld;           // water-surface radius (world units)
+            public float coverRadiusWorld;      // how far the water PLANE extends (radius + shore) — terrain clips it
+            public float waterLevelNormalized;  // lake surface height (normalized; world Y = terrainBaseY + this * size.y)
+            public BiomeAssetManifest biome;    // the LAKES biome this belongs to (for water-surface plants), or null
+        }
+
         // ---- Heightmap ----------------------------------------------------
 
         /// <summary>Per-island randomized shape controls: coastline irregularity, elongation, placement.</summary>
@@ -160,6 +172,89 @@ namespace IslandSystem
                 }
             });
             return heights;
+        }
+
+        /// <summary>
+        /// ARCHIPELAGO carve: force a low-frequency network of channels DOWN below the sea so one island reads as a
+        /// cluster of smaller islands separated by ocean lagoons (the tropical look). A domain-warped 2-octave clump
+        /// field defines land (high) vs. channel (low); channel cells are lerped toward a sub-sea floor with a
+        /// smoothed shore. Runs after all relief/smoothing and only ever LOWERS ground, so the surviving land keeps
+        /// its shape. Deterministic from the island seed (<paramref name="sp"/>.seedOffset) → multiplayer-safe.
+        /// </summary>
+        /// <summary>GLSL-style edge smoothstep (Unity's Mathf.SmoothStep is a smoothed LERP, not this): 0 below
+        /// <paramref name="e0"/>, 1 above <paramref name="e1"/>, smooth Hermite in between.</summary>
+        static float EdgeStep(float e0, float e1, float x)
+        {
+            float t = Mathf.Clamp01((x - e0) / Mathf.Max(1e-6f, e1 - e0));
+            return t * t * (3f - 2f * t);
+        }
+
+        static void CarveArchipelago(float[,] heights, int res, ShapeParams sp, ArchipelagoSettings arch, float waterline, float sizeY)
+        {
+            if (arch == null || arch.channels <= 0) return;
+
+            // Channels follow the iso-contour (p ≈ 0.5) of a couple of LOW-frequency Perlin fields. An iso-line of a
+            // continuous field always snakes ACROSS the whole tile, so — unlike thresholding blob noise, whose low
+            // patches can miss the island entirely — this GUARANTEES the channels cut through the landmass. On a
+            // channel line the ground is forced down to a sub-sea floor regardless of its original height, so even
+            // tall interior land is split. Off the lines the terrain is untouched.
+            float s = sp.seedOffset;
+            int nLines = Mathf.Clamp(arch.channels, 1, 3);            // inspector: how many channels cross the island
+            float halfW = Mathf.Max(0.01f, arch.channelWidth);        // inspector: channel width (Perlin-value units)
+            // Channel cross-section: a narrow flat CORE (full depth) plus a WIDE gentle shore ramp back up to land,
+            // so the banks ease into the water instead of dropping as cliffs. coreHalf = deep core, shoreEnd = where
+            // the land is fully restored — the wide gap between them is the gentle slope.
+            float coreHalf = halfW * 0.30f;
+            float shoreEnd = halfW * 1.9f;
+            float depthNorm = sizeY > 0.001f ? arch.channelDepth / sizeY : 0.04f;  // world depth → normalized
+            float floor = Mathf.Max(0f, waterline - depthNorm);       // channel bed (normalized) → below the sea
+            const float warpAmp = 0.12f;
+
+            System.Threading.Tasks.Parallel.For(0, res, y =>
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    float fx = (float)x / res, fy = (float)y / res;
+                    // Domain-warp so the channels meander organically instead of running as smooth arcs.
+                    float wx = (Mathf.PerlinNoise(fx * 1.9f + s + 11.3f, fy * 1.9f + s + 4.1f) - 0.5f) * warpAmp;
+                    float wy = (Mathf.PerlinNoise(fx * 1.9f + s + 27.9f, fy * 1.9f + s + 8.7f) - 0.5f) * warpAmp;
+                    float cx = fx + wx, cy = fy + wy;
+
+                    // channelness = 1 in the core, easing to 0 across the wide shore band → a gentle slope.
+                    float chan = 0f;
+                    float p1 = Mathf.PerlinNoise(cx * 2.3f + s + 5.1f, cy * 2.3f + s + 9.3f);
+                    chan = Mathf.Max(chan, 1f - EdgeStep(coreHalf, shoreEnd, Mathf.Abs(p1 - 0.5f)));
+                    if (nLines >= 2)
+                    {
+                        float p2 = Mathf.PerlinNoise(cx * 1.7f + s + 41.7f, cy * 1.7f + s + 63.3f);
+                        chan = Mathf.Max(chan, 1f - EdgeStep(coreHalf, shoreEnd, Mathf.Abs(p2 - 0.5f)));
+                    }
+                    if (nLines >= 3)
+                    {
+                        float p3 = Mathf.PerlinNoise(cx * 3.1f + s + 77.2f, cy * 3.1f + s + 15.9f);
+                        chan = Mathf.Max(chan, 1f - EdgeStep(coreHalf, shoreEnd, Mathf.Abs(p3 - 0.5f)));
+                    }
+
+                    if (chan > 0.001f)
+                    {
+                        // Ease-in curve on chan (chan²) softens the top lip where the shore meets full-height land.
+                        float sunk = Mathf.Lerp(heights[y, x], floor, chan * chan);
+                        if (sunk < heights[y, x]) heights[y, x] = sunk;         // only ever lower
+                    }
+                }
+            });
+
+            // Round the coastline + soften the cut banks: blend the carved heightmap toward a blurred copy. This
+            // rounds the sharp island corners the noise leaves AND removes the staircase aliasing the steep cuts
+            // create on the heightmap grid. Moderate radius/amount so the channels stay below the sea.
+            int br = Mathf.Max(2, Mathf.RoundToInt(res * 0.012f));
+            var blur = BoxBlur(heights, res, br);
+            const float smooth = 0.6f;
+            System.Threading.Tasks.Parallel.For(0, res, y =>
+            {
+                for (int x = 0; x < res; x++)
+                    heights[y, x] = Mathf.Lerp(heights[y, x], blur[y, x], smooth);
+            });
         }
 
         // ---- Biome-aware relief + Perlin erosion --------------------------
@@ -387,7 +482,7 @@ namespace IslandSystem
             Vector3? sizeOverride, float waterlineNormalized, out List<BiomeBand> bands)
         {
             var data = new TerrainData();
-            PopulateIslandFromType(data, def, seed, sizeOverride ?? def.terrainSize, waterlineNormalized, out bands, out _);
+            PopulateIslandFromType(data, def, seed, sizeOverride ?? def.terrainSize, waterlineNormalized, out bands, out _, out _);
             return data;
         }
 
@@ -402,7 +497,7 @@ namespace IslandSystem
         {
             public int hmRes, alphaRes; public Vector3 size;
             public TerrainLayer[] layers; public float[,] heights; public float[,,] maps;
-            public List<BiomeBand> bands; public List<VillageZone> villages;
+            public List<BiomeBand> bands; public List<VillageZone> villages; public List<LakeZone> lakes;
         }
         static readonly Dictionary<int, CachedIsland> _islandCache = new Dictionary<int, CachedIsland>();
         static readonly List<int> _cacheOrder = new List<int>();
@@ -433,10 +528,11 @@ namespace IslandSystem
         /// </summary>
         public static void PopulateIslandFromType(TerrainData data, IslandTypeDefinition def, int seed,
             Vector3 size, float waterlineNormalized, out List<BiomeBand> bands, out List<VillageZone> villages,
-            int resolutionOverride = 0)
+            out List<LakeZone> lakes, int resolutionOverride = 0)
         {
             bands = new List<BiomeBand>();
             villages = new List<VillageZone>();
+            lakes = new List<LakeZone>();
 
             var rng = new System.Random(seed);
             ShapeParams shape = MakeShapeParams(rng);
@@ -454,6 +550,7 @@ namespace IslandSystem
                 data.SetAlphamaps(0, 0, cached.maps);
                 bands.AddRange(cached.bands);
                 villages.AddRange(cached.villages);
+                if (cached.lakes != null) lakes.AddRange(cached.lakes);
                 return;
             }
 
@@ -473,6 +570,23 @@ namespace IslandSystem
                 def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
             float[] macroEdges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
             ApplyBiomeRelief(heights, hmRes, entries, macroEdges, def, shape, waterlineNormalized);
+
+            // Optional whole-island smoothing: blend the heightmap toward a blurred copy to soften sharp ridges /
+            // abrupt slopes. Done before the band edges are re-computed so bands line up with the smoothed terrain.
+            if (def.terrainSmoothing > 0.001f)
+            {
+                int r = Mathf.Max(1, Mathf.RoundToInt(1f + def.terrainSmoothing * 4f));
+                var blurred = BoxBlur(heights, hmRes, r);
+                float s = def.terrainSmoothing;
+                for (int y = 0; y < hmRes; y++)
+                    for (int x = 0; x < hmRes; x++)
+                        heights[y, x] = Mathf.Lerp(heights[y, x], blurred[y, x], s);
+            }
+
+            // Archipelago fragmentation: sink low-lying channel bands BELOW the sea to split the landmass into a
+            // cluster of islands with ocean lagoons between them. Runs LAST (after relief + smoothing) so nothing
+            // can refill the channels; only ever lowers ground, so the remaining land keeps its shape.
+            CarveArchipelago(heights, hmRes, shape, def.archipelago, waterlineNormalized, size.y);
 
             int n = entries.Count;
             float[] edges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
@@ -525,6 +639,7 @@ namespace IslandSystem
             // ---- Villages: pick sites + FLATTEN the heightmap array now, before the splat & SetHeights so
             // the levelled ground is what gets textured and committed. ----
             ChooseAndFlattenVillages(heights, hmRes, size, bands, waterlineNormalized, seed, villages);
+
 
             int maxSub = 1;
             for (int k = 0; k < n; k++) maxSub = Mathf.Max(maxSub, subChan[k].Count);
@@ -598,7 +713,8 @@ namespace IslandSystem
             {
                 hmRes = hmRes, alphaRes = aw, size = size, layers = layerArr,
                 heights = heights, maps = maps,
-                bands = new List<BiomeBand>(bands), villages = new List<VillageZone>(villages)
+                bands = new List<BiomeBand>(bands), villages = new List<VillageZone>(villages),
+                lakes = new List<LakeZone>(lakes)
             });
         }
 
@@ -866,13 +982,75 @@ namespace IslandSystem
         }
 
         /// <summary>
+        /// Scatters tree-free CLEARINGS (meadows) for every biome that enables them, returning a list of exclusion
+        /// zones (circles) to feed ONLY the tree scatter — rocks/flowers/grass ignore them, so the openings fill
+        /// with ground cover and read as forest glades. Each clearing is a main disc plus a few smaller offset
+        /// lobes (organic edge), placed within the biome's own elevation band. Deterministic from the seed.
+        /// </summary>
+        public static List<VillageZone> PlaceClearings(Terrain terrain, List<BiomeBand> bands, int seed)
+        {
+            var zones = new List<VillageZone>();
+            if (bands == null || terrain == null) return zones;
+            var data = terrain.terrainData;
+            Vector3 size = data.size;
+            float invY = 1f / Mathf.Max(0.0001f, size.y);
+
+            int bi = 0;
+            foreach (var band in bands)
+            {
+                bi++;
+                var cs = band.biome != null ? band.biome.clearings : null;
+                if (cs == null || !cs.enabled || cs.count <= 0) continue;
+
+                var rng = new System.Random(seed * 6151 + bi * 7919 + 331);
+                float minR = Mathf.Max(2f, cs.minRadius);
+                float maxR = Mathf.Max(minR, cs.maxRadius);
+                var centers = new List<Vector2>();                 // world XZ of accepted centres (spacing test)
+                int placed = 0, guard = Mathf.Max(200, cs.count * 80);
+
+                while (placed < cs.count && guard-- > 0)
+                {
+                    float u = (float)rng.NextDouble(), v = (float)rng.NextDouble();
+                    // Must land inside THIS biome's elevation band — that's what ties the clearing to the biome.
+                    float hN = data.GetInterpolatedHeight(u, v) * invY;
+                    if (hN < band.lo || hN > band.hi) continue;
+
+                    Vector2 cw = new Vector2(u * size.x, v * size.z);
+                    bool near = false;
+                    foreach (var c in centers) if ((c - cw).sqrMagnitude < cs.minSpacing * cs.minSpacing) { near = true; break; }
+                    if (near) continue;
+
+                    float R = Mathf.Lerp(minR, maxR, (float)rng.NextDouble());
+                    float feather = Mathf.Max(0f, cs.edgeFeather);
+                    centers.Add(cw);
+                    // smoothedHeight carries the feather width (world units) → the tree scatter reads it as the soft edge.
+                    zones.Add(new VillageZone { centerUV = new Vector2(u, v), radiusWorld = R, smoothedHeight = feather });
+
+                    // Organic edge: a few smaller circles offset around the centre so the opening isn't a perfect disc.
+                    int lobes = Mathf.RoundToInt(Mathf.Lerp(0f, 4f, Mathf.Clamp01(cs.irregularity)));
+                    for (int l = 0; l < lobes; l++)
+                    {
+                        float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                        float off = R * Mathf.Lerp(0.4f, 0.9f, (float)rng.NextDouble());
+                        float lr = R * Mathf.Lerp(0.45f, 0.8f, (float)rng.NextDouble());
+                        float lu = u + Mathf.Cos(ang) * off / size.x;
+                        float lv = v + Mathf.Sin(ang) * off / size.z;
+                        zones.Add(new VillageZone { centerUV = new Vector2(lu, lv), radiusWorld = lr, smoothedHeight = feather });
+                    }
+                    placed++;
+                }
+            }
+            return zones;
+        }
+
+        /// <summary>
         /// Scatters the biomes' tree prefabs (Trees/) as GAMEOBJECTS under a "Trees" holder — each confined to
         /// its biome's elevation band, off villages/fade, by the rule's condition. Placement is by DENSITY
         /// (trees per 100 m²), species are picked by weight, and a global no-overlap test keeps trees from
         /// spawning inside one another. GameObjects (not Terrain tree instances) so per-tree Y-rotation, random
         /// scale and sink actually apply — URP terrain tree instances ignore rotation and can't sink.
         /// </summary>
-        public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages)
+        public static void PlaceTrees(Terrain terrain, IslandTypeDefinition def, int seed, List<BiomeBand> bands, List<VillageZone> villages, List<VillageZone> clearings = null)
         {
             var data = terrain.terrainData;
             // Drop any legacy terrain-tree instances (we GPU-instance trees now).
@@ -981,6 +1159,7 @@ namespace IslandSystem
             // the placements back on the main thread and register them for GPU-instanced drawing.
             var hf = HeightField.FromTerrain(terrain, Allocator.TempJob);
             var villageArr = BuildVillageArray(villages, Allocator.TempJob);
+            var clearingArr = BuildClearingArray(clearings, Allocator.TempJob);
             var rulesArr = new NativeArray<ScatterRuleB>(ruleList.ToArray(), Allocator.TempJob);
             var weightsArr = new NativeArray<float>(weightList.ToArray(), Allocator.TempJob);
             var radiusArr = new NativeArray<float>(prefabRadiusList.ToArray(), Allocator.TempJob);
@@ -991,7 +1170,7 @@ namespace IslandSystem
             new TreeScatterJob
             {
                 hf = hf, rules = rulesArr, weights = weightsArr, prefabRadius = radiusArr,
-                villages = villageArr, cell = cell, pack = pack, occ = occ, outList = outList
+                villages = villageArr, clearings = clearingArr, cell = cell, pack = pack, occ = occ, outList = outList
             }.Schedule().Complete();
 
             for (int i = 0; i < outList.Length; i++)
@@ -1004,10 +1183,24 @@ namespace IslandSystem
                     Vector3.Scale(prefab.transform.localScale, (Vector3)inst.scale));   // full x/y/z (height varies)
             }
 
-            hf.Dispose(); villageArr.Dispose(); rulesArr.Dispose();
+            hf.Dispose(); villageArr.Dispose(); clearingArr.Dispose(); rulesArr.Dispose();
             weightsArr.Dispose(); radiusArr.Dispose(); occ.Dispose(); outList.Dispose();
 
             treeRenderer.Finish();
+        }
+
+        /// <summary>Packs clearing zones for the SOFT tree-thinning path: xy = centre UV, z = core radius,
+        /// w = feather width (world, carried in the zone's smoothedHeight).</summary>
+        public static NativeArray<float4> BuildClearingArray(List<VillageZone> clearings, Allocator alloc)
+        {
+            int n = clearings != null ? clearings.Count : 0;
+            var arr = new NativeArray<float4>(n, alloc, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < n; i++)
+            {
+                var z = clearings[i];
+                arr[i] = new float4(z.centerUV.x, z.centerUV.y, z.radiusWorld, z.smoothedHeight);
+            }
+            return arr;
         }
 
         /// <summary>Packs the serialized village zones into a job-friendly array: xy = centre UV, z = radius (world).</summary>
@@ -1291,6 +1484,7 @@ namespace IslandSystem
             }
             return true;
         }
+
 
         /// <summary>Places village buildings as GameObjects on the levelled ground of each zone (under a "Village" holder).</summary>
         public static void PlaceVillageBuildings(Terrain terrain, List<VillageZone> villages, int seed)

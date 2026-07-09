@@ -209,6 +209,30 @@ namespace IslandSystem
     }
 
     /// <summary>
+    /// CLEARINGS (meadows/glades): tree-free openings scattered through a biome. Trees are kept OUT of these
+    /// zones, but rocks, flowers and grass still fill them — so a clearing reads as an open grassy meadow dotted
+    /// with stones and flowers, ringed by the forest. Deterministic from the island seed (multiplayer-safe).
+    /// </summary>
+    [Serializable]
+    public class ClearingSettings
+    {
+        public bool enabled = false;
+        [Tooltip("How many clearings of this biome to scatter per island.")]
+        [Range(0, 60)] public int count = 4;
+        [Tooltip("Clearing radius range (world units) — each clearing picks a random size in this range.")]
+        public float minRadius = 9f;
+        public float maxRadius = 22f;
+        [Tooltip("Organic edge: how strongly the outline is broken up by extra lobes (0 = a clean circle, 1 = very " +
+                 "blobby). Purely cosmetic — makes the tree-free opening look natural instead of a perfect disc.")]
+        [Range(0f, 1f)] public float irregularity = 0.6f;
+        [Tooltip("SOFT edge: over how many world units the trees THIN OUT around the opening (a feathered treeline). " +
+                 "0 = a hard circular tree wall (reads as a punched hole); ~10-20 = a natural glade the forest eases into.")]
+        [Range(0f, 40f)] public float edgeFeather = 14f;
+        [Tooltip("Keep clearings at least this far apart (world units, centre to centre).")]
+        public float minSpacing = 30f;
+    }
+
+    /// <summary>
     /// Per-biome grass: drives the procedural grass field (IslandSystem/Grass shader). Each biome can have its
     /// own colour, density, size and wind so the look varies per biome (e.g. lush green meadow vs sparse tundra).
     /// </summary>
@@ -296,6 +320,9 @@ namespace IslandSystem
         public string displayName;
         [Tooltip("Where this zone sits on an island: 0 = shoreline, 1 = peaks. Orders the biome bands.")]
         [Range(0f, 1f)] public float elevationOrder = 0.5f;
+        [Tooltip("This biome is the LAKES biome — carved lakes are placed within/around it (off the mountains) and " +
+                 "tagged with it, so its rules can spawn water-surface plants on the lakes.")]
+        public bool isLakeBiome = false;
         [Tooltip("Local ruggedness hint: plains low, hills/mountains high. (Reserved for relief shaping.)")]
         [Range(0f, 1f)] public float reliefStrength = 0.5f;
         [Tooltip("Preview colour used by the generator until real textures are scanned in.")]
@@ -339,6 +366,9 @@ namespace IslandSystem
 
         [Header("Village — flattened build zones (buildings from Buildings/)")]
         public VillageSettings village = new VillageSettings();
+
+        [Header("Clearings — tree-free meadows (rocks + flowers + grass stay)")]
+        public ClearingSettings clearings = new ClearingSettings();
 
         [Header("Grass — procedural grass field (IslandSystem/Grass shader)")]
         [Tooltip("Grass layers for this biome — add several (e.g. a flat moss base + upright grass + flowers). " +

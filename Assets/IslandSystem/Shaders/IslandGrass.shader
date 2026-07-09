@@ -27,8 +27,9 @@ Shader "IslandSystem/Grass"
         _AmbientBoost ("Ambient Boost", Range(0,1)) = 0.35
 
         [Header(Ground color pull)]
-        _GroundColorStrength ("Ground Color Strength (root blends to the terrain beneath)", Range(0,1)) = 0.7
-        _GroundColorHeight ("Ground Color Height (fraction of the blade affected)", Range(0.05,1)) = 0.55
+        _GroundColorStrength ("Ground Color Strength (whole blade toward terrain colour)", Range(0,1)) = 1.0
+        _GroundColorHeight ("Ground Color Height (unused — tint is uniform now)", Range(0.05,1)) = 0.55
+        _GroundColorVariation ("Ground Color Variation (per-patch colour spread)", Range(0,1)) = 0.35
     }
     SubShader
     {
@@ -63,7 +64,7 @@ Shader "IslandSystem/Grass"
             float  _Cutoff, _Tiles, _ColorVariation, _VariationScale;
             float  _FadeStart, _FadeEnd;
             float  _WindHeight, _WindStrength, _BendStrength, _AmbientBoost;
-            float  _GroundColorStrength, _GroundColorHeight;
+            float  _GroundColorStrength, _GroundColorHeight, _GroundColorVariation;
         CBUFFER_END
 
         // Cheap 2D value noise for the large-scale colour variation. WORLD-space input → patches are
@@ -173,7 +174,7 @@ Shader "IslandSystem/Grass"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; float3 ambient : TEXCOORD5; float dry : TEXCOORD6; float3 gcol : TEXCOORD7; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float grad : TEXCOORD1; float3 nWS : TEXCOORD2; float3 wpos : TEXCOORD3; float fog : TEXCOORD4; float3 ambient : TEXCOORD5; float dry : TEXCOORD6; float4 gcol : TEXCOORD7; };   // gcol.rgb = ground colour, gcol.w = patch noise (for spread)
 
             Varyings vert (Attributes IN)
             {
@@ -191,14 +192,14 @@ Shader "IslandSystem/Grass"
                 // shares it (no per-vertex shimmer from the wind sway). Unused if no map is bound (guarded in frag).
                 float4x4 gm = _PerInstanceData[_VisibleIDs[IN.instanceID]];
                 float2 guv = (float2(gm._m03, gm._m23) - _GroundColorParams.xy) / max(1e-4, _GroundColorParams.zw);
-                o.gcol = SAMPLE_TEXTURE2D_LOD(_GroundColorTex, sampler_GroundColorTex, guv, 0).rgb;
+                float pn = patchNoise(posWS.xz * _VariationScale);   // world colour-variation noise (reused below)
+                o.gcol = float4(SAMPLE_TEXTURE2D_LOD(_GroundColorTex, sampler_GroundColorTex, guv, 0).rgb, pn);
 
                 // Moved out of the fragment (big per-pixel savings over full-screen grass): the SH ambient and
                 // the large-scale colour-variation noise (patchNoise = domain warp + 3 octaves) are smooth over
                 // a blade, so per-VERTEX + interpolation is visually identical and far cheaper.
                 o.ambient = SampleSH(nWS) + _AmbientBoost.xxx;
-                o.dry = (_ColorVariation > 0.001)
-                    ? smoothstep(0.28, 0.72, patchNoise(posWS.xz * _VariationScale)) * _ColorVariation : 0.0;
+                o.dry = (_ColorVariation > 0.001) ? smoothstep(0.28, 0.72, pn) * _ColorVariation : 0.0;
                 return o;
             }
 
@@ -225,12 +226,16 @@ Shader "IslandSystem/Grass"
 
                 float3 col = tex.rgb * tint * lighting;
 
-                // Pull the blade ROOT toward the terrain colour beneath it (0 at/above _GroundColorHeight up the
-                // blade, full at the root) so grass blends seamlessly into whatever ground it grows on. Skipped
-                // when no ground map is bound (_GroundColorParams.z == 0). The ground colour is lit like the grass.
+                // Tint the WHOLE blade toward the terrain colour beneath it (sandy on sand, earthy on dirt, green
+                // on grass) — but NOT a flat block: keep the blade texture's light/dark DETAIL and add a per-patch
+                // colour SPREAD so the field has natural variation. Skipped when no ground map is bound.
                 float hasGround = step(1e-4, _GroundColorParams.z);
-                float rootBlend = _GroundColorStrength * hasGround * saturate(1.0 - i.grad / max(0.05, _GroundColorHeight));
-                col = lerp(col, i.gcol * lighting, rootBlend);
+                float detail = dot(tex.rgb, float3(0.299, 0.587, 0.114));   // blade texture luminance (fine detail)
+                float detailMul = lerp(0.72, 1.28, detail);                 // keep the blade's light/dark structure
+                float3 spread = 1.0 + (i.gcol.w - 0.5) * float3(1.0, 0.7, 1.15) * _GroundColorVariation;  // per-patch hue/brightness
+                float3 grounded = i.gcol.rgb * detailMul * spread * lighting;
+                float blend = _GroundColorStrength * hasGround;
+                col = lerp(col, grounded, blend);
 
                 col = MixFog(col, i.fog);
                 return half4(col, 1.0);

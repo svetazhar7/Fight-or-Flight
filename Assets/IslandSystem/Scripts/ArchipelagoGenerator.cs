@@ -49,6 +49,8 @@ namespace IslandSystem
         public Material waterMaterial;
         [Tooltip("World Y of the sea surface. Islands sit on Y=0.")]
         public float waterLevel = 4f;
+        [Tooltip("Water material for the inland LAKES (a tinted, pond-like variant). Falls back to the ocean material if null.")]
+        public Material lakeMaterial;
         [Tooltip("Minimum ocean size; auto-expands to cover the whole archipelago.")]
         public float oceanSize = 4500f;
 
@@ -209,7 +211,13 @@ namespace IslandSystem
             // re-expressed relative to this lowered base so the biome bands still line up with the sea surface.
             float baseY = seabedLevel - IslandFloorSink;
             float waterline = (waterLevel - baseY) / Mathf.Max(0.0001f, size.y);
-            IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, out var villages, resolution);
+            IslandTerrainGenerator.PopulateIslandFromType(data, def, seed, size, waterline, out var bands, out var villages, out var lakes, resolution);
+
+            // Scatter/stream keep-out zones = villages + lakes (so trees/rocks/grass/flowers never spawn in the
+            // water). Village BUILDINGS still use the real village list (below), not this combined one.
+            var keepOut = new List<IslandTerrainGenerator.VillageZone>(villages);
+            foreach (var lk in lakes)
+                keepOut.Add(new IslandTerrainGenerator.VillageZone { centerUV = lk.centerUV, radiusWorld = lk.radiusWorld + 3f });
 
             GameObject go = Terrain.CreateTerrainGameObject(data);
             go.name = $"{prefix}_{nameIndex}_{def.islandType}";
@@ -231,17 +239,26 @@ namespace IslandSystem
             terrain.basemapDistance = 5000f;              // placeholder — TerrainLOD sets a whole-island value
             go.AddComponent<TerrainLOD>();                // per-island geometry LOD + whole-island basemap
 
-            IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, villages);
-            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, villages);   // trees: ALWAYS loaded (off villages)
-            IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, villages); // rock GameObjects (off villages)
-            IslandTerrainGenerator.PlaceVillageBuildings(terrain, villages, seed);    // buildings on the flattened ground
+            // Clearings (meadows): tree-free openings. They gate ONLY the trees — rocks/flowers/grass keep their
+            // normal keep-out (villages + lakes), so the openings fill with ground cover.
+            var clearings = IslandTerrainGenerator.PlaceClearings(terrain, bands, seed);
+            var treeKeepOut = new List<IslandTerrainGenerator.VillageZone>(keepOut);
+            treeKeepOut.AddRange(clearings);
+
+            IslandTerrainGenerator.ScatterCompositionObjects(terrain, def, seed, bands, keepOut);
+            IslandTerrainGenerator.PlaceTrees(terrain, def, seed, bands, treeKeepOut);   // trees avoid villages + lakes + CLEARINGS
+            IslandTerrainGenerator.ScatterRocks(terrain, def, seed, bands, keepOut); // rocks (fill clearings too)
+            IslandTerrainGenerator.PlaceVillageBuildings(terrain, villages, seed);   // buildings on the flattened ground (real villages)
+
+            // Lake water surfaces — a flat disc at each lake's (possibly elevated) water level, reusing the ocean water.
+            foreach (var lk in lakes) CreateLakeWater(go.transform, lk, size);
 
             var marker = go.AddComponent<IslandMarker>();
             marker.isHub = isHub;
             marker.climateZone = def.climateZone;
             marker.islandType = def.islandType;
             foreach (var b in bands) marker.bands.Add(new IslandBand { biome = b.biome, lo = b.lo, hi = b.hi });
-            marker.villages.AddRange(villages);   // streamed systems (flowers) keep out of villages at runtime
+            marker.villages.AddRange(keepOut);   // streamed systems (flowers/grass) keep out of villages AND lakes
 
             // Procedural grass: attach a streamer that builds grass in CHUNKS around the camera (only if any
             // biome has grass layers). Nothing is built until the camera is near — cheap on huge islands.
@@ -471,6 +488,69 @@ namespace IslandSystem
                 refl.reflectionLayers = ~mask;
             }
             return tw;
+        }
+
+        // ---- Lakes ----
+
+        static Mesh _lakePlane;
+        /// <summary>Shared SUBDIVIDED unit DISC (radius 1, concentric rings) — the rings give the water shader
+        /// vertices to displace for waves, and it's BOUNDED (no square corners) so it stays within the basin's
+        /// surrounding terrain, which clips it to the natural lake shape (no visible circle edge).</summary>
+        static Mesh LakeWaterMesh()
+        {
+            if (_lakePlane != null) return _lakePlane;
+            const int rings = 12, seg = 40;
+            var verts = new System.Collections.Generic.List<Vector3>(1 + rings * seg);
+            var uvs = new System.Collections.Generic.List<Vector2>(1 + rings * seg);
+            var tris = new System.Collections.Generic.List<int>();
+            verts.Add(Vector3.zero); uvs.Add(new Vector2(0.5f, 0.5f));
+            for (int r = 1; r <= rings; r++)
+            {
+                float rad = (float)r / rings;
+                for (int s = 0; s < seg; s++)
+                {
+                    float a = Mathf.PI * 2f * s / seg;
+                    verts.Add(new Vector3(Mathf.Cos(a) * rad, 0f, Mathf.Sin(a) * rad));
+                    uvs.Add(new Vector2(0.5f + 0.5f * Mathf.Cos(a) * rad, 0.5f + 0.5f * Mathf.Sin(a) * rad));
+                }
+            }
+            // centre fan (viewed from +Y, wind CCW so normals point up)
+            for (int s = 0; s < seg; s++) { int a = 1 + s, b = 1 + (s + 1) % seg; tris.Add(0); tris.Add(b); tris.Add(a); }
+            for (int r = 1; r < rings; r++)
+            {
+                int inner = 1 + (r - 1) * seg, outer = 1 + r * seg;
+                for (int s = 0; s < seg; s++)
+                {
+                    int i0 = inner + s, i1 = inner + (s + 1) % seg, o0 = outer + s, o1 = outer + (s + 1) % seg;
+                    tris.Add(i0); tris.Add(o1); tris.Add(o0);
+                    tris.Add(i0); tris.Add(i1); tris.Add(o1);
+                }
+            }
+            _lakePlane = new Mesh { name = "LakeWaterDisc" };
+            _lakePlane.SetVertices(verts); _lakePlane.SetUVs(0, uvs); _lakePlane.SetTriangles(tris, 0);
+            _lakePlane.RecalculateNormals(); _lakePlane.RecalculateBounds();
+            return _lakePlane;
+        }
+
+        /// <summary>Wavy water plane filling a lake basin at its (possibly above-sea) water level. It's a flat plane
+        /// bigger than the basin CLIPPED by the surrounding terrain (which rises above the water), so it reads like
+        /// the ocean — natural-shaped, with the shader's small waves — not a flat disc. Terrain-child space.</summary>
+        void CreateLakeWater(Transform terrainGO, IslandTerrainGenerator.LakeZone lake, Vector3 size)
+        {
+            var mat = lakeMaterial != null ? lakeMaterial : waterMaterial;
+            if (mat == null) return;
+            var go = new GameObject("Lake");
+            go.transform.SetParent(terrainGO, false);
+            go.transform.localPosition = new Vector3(lake.centerUV.x * size.x, lake.waterLevelNormalized * size.y, lake.centerUV.y * size.z);
+            float cover = Mathf.Max(lake.radiusWorld + 2f, lake.coverRadiusWorld);   // spans the shore; terrain clips it
+            go.transform.localScale = new Vector3(cover, 1f, cover);
+            int waterLayer = LayerMask.NameToLayer("Water");
+            if (waterLayer >= 0) go.layer = waterLayer;
+            go.AddComponent<MeshFilter>().sharedMesh = LakeWaterMesh();
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
         }
 
         /// <summary>Rebuild ONLY the ocean water (native Poseidon setup) without regenerating the islands.</summary>
