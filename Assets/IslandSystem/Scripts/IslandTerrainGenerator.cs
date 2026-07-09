@@ -131,15 +131,114 @@ namespace IslandSystem
             return m;
         }
 
-        /// <summary>Builds the full masked + shaped heightmap with domain-warped, plateau-shaped terrain.</summary>
+        /// <summary>A single organic island LOBE (a warped, elongated dome). Real islands are built from a few of
+        /// these strung along an axis → branching, non-round shapes instead of a clean circle.</summary>
+        struct SubLobe { public float u, v, r, seed, aspect, rot, warp; }
+
+        /// <summary>
+        /// Deterministically builds the archipelago cluster as a set of LOBES grouped into <paramref name="k"/>
+        /// islands: one island at the tile centre plus the rest on a jittered ring, and each island is 2-4
+        /// overlapping elongated lobes strung along a random axis (so islands read as ragged, varied shapes, not
+        /// discs). Spacing keeps islands separated by open water; nothing clips the tile edge.
+        /// </summary>
+        static SubLobe[] BuildSubIslands(int k, float spread, float sizeVar, ShapeParams sp)
+        {
+            var rng = new System.Random(Mathf.RoundToInt(sp.seedOffset * 1000f) + k * 3163 + 17);
+            float spreadR = Mathf.Lerp(0.13f, 0.30f, Mathf.Clamp01(spread));   // ring radius (centre → satellites)
+            int ring = Mathf.Max(1, k - 1);
+            float ringNeighbor = (ring >= 2) ? 2f * spreadR * Mathf.Sin(Mathf.PI / ring) : 2f * spreadR;
+            float spacing = Mathf.Min(spreadR, ringNeighbor);
+            float baseR = Mathf.Clamp(spacing * 0.26f, 0.045f, 0.11f);         // island CORE radius (lobes extend it)
+            float start = (float)rng.NextDouble() * Mathf.PI * 2f;
+            var lobes = new List<SubLobe>(k * 4);
+            for (int i = 0; i < k; i++)
+            {
+                float sv = Mathf.Lerp(1f - 0.5f * sizeVar, 1f + 0.5f * sizeVar, (float)rng.NextDouble());
+                float icu, icv, isize;
+                if (i == 0)   // central, slightly larger island
+                {
+                    icu = 0.5f + (float)(rng.NextDouble() - 0.5) * spreadR * 0.25f;
+                    icv = 0.5f + (float)(rng.NextDouble() - 0.5) * spreadR * 0.25f;
+                    isize = Mathf.Min(0.12f, baseR * 1.2f * sv);
+                }
+                else
+                {
+                    float ang = start + (i - 1) * (Mathf.PI * 2f / ring) + (float)(rng.NextDouble() - 0.5) * 0.5f;
+                    float rad = spreadR * Mathf.Lerp(0.85f, 1.12f, (float)rng.NextDouble());
+                    icu = 0.5f + Mathf.Cos(ang) * rad;
+                    icv = 0.5f + Mathf.Sin(ang) * rad;
+                    isize = Mathf.Max(0.04f, baseR * sv);
+                }
+
+                // 2-4 lobes strung roughly along this island's axis → an elongated, clumpy body.
+                int nl = 2 + rng.Next(3);
+                float islandAxis = (float)rng.NextDouble() * Mathf.PI;
+                for (int l = 0; l < nl; l++)
+                {
+                    float off = (l == 0) ? 0f : isize * Mathf.Lerp(0.25f, 0.6f, (float)rng.NextDouble());
+                    float la = islandAxis + (float)(rng.NextDouble() - 0.5) * 1.4f;
+                    lobes.Add(new SubLobe
+                    {
+                        u = icu + Mathf.Cos(la) * off,
+                        v = icv + Mathf.Sin(la) * off,
+                        r = isize * Mathf.Lerp(0.55f, 0.9f, (float)rng.NextDouble()),
+                        seed = sp.seedOffset + (i * 7 + l) * 137.13f + 3.7f,
+                        aspect = Mathf.Lerp(1f, 2.1f, (float)rng.NextDouble()),          // elongation
+                        rot = islandAxis + (float)(rng.NextDouble() - 0.5) * 0.7f,
+                        warp = Mathf.Lerp(0.55f, 1.15f, (float)rng.NextDouble())         // per-lobe coastline raggedness
+                    });
+                }
+            }
+            return lobes.ToArray();
+        }
+
+        /// <summary>Max over the island lobes (union → separate islands, open sea between). Each lobe is an
+        /// ELONGATED dome with a strong multi-octave coastline warp (bays + peninsulas) → ragged, realistic shapes.</summary>
+        static float SubIslandMask(float fx, float fy, SubLobe[] lobes)
+        {
+            float best = 0f;
+            for (int i = 0; i < lobes.Length; i++)
+            {
+                var lo = lobes[i];
+                float du = fx - lo.u, dv = fy - lo.v;
+                // rotate into the lobe's frame + elongate (aspect stretches one axis).
+                float ca = Mathf.Cos(lo.rot), sa = Mathf.Sin(lo.rot);
+                float ru = (du * ca - dv * sa) / lo.aspect;
+                float rv = (du * sa + dv * ca) * lo.aspect;
+                float dist = Mathf.Sqrt(ru * ru + rv * rv) / Mathf.Max(0.02f, lo.r);
+                // Three-octave coastline warp: low = big bays/peninsulas, mid + high = ragged fractal detail.
+                float wl = Mathf.PerlinNoise(fx * 2.2f + lo.seed, fy * 2.2f + lo.seed * 0.7f + 13.1f) - 0.5f;
+                float wm = Mathf.PerlinNoise(fx * 4.7f + lo.seed * 1.7f + 5.3f, fy * 4.7f + lo.seed * 0.3f + 91.7f) - 0.5f;
+                float wh = Mathf.PerlinNoise(fx * 9.3f + lo.seed * 2.3f + 41.1f, fy * 9.3f + lo.seed * 0.9f + 7.9f) - 0.5f;
+                dist += Mathf.Clamp(wl * lo.warp + wm * lo.warp * 0.55f + wh * lo.warp * 0.28f, -0.30f, 0.18f);   // deep bays, ragged edge
+                float edge = 1f - dist;
+                if (edge <= 0f) continue;
+                float t = Mathf.Clamp01(edge / 0.72f);
+                float m = t * t;
+                if (m > best) best = m;
+            }
+            // Far tile-edge backstop (same as IslandShapeMask) so nothing clips the tile border.
+            float rad = Mathf.Sqrt((fx - 0.5f) * (fx - 0.5f) + (fy - 0.5f) * (fy - 0.5f));
+            best *= 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.46f, 0.50f, rad));
+            return best;
+        }
+
+        /// <summary>Builds the full masked + shaped heightmap with domain-warped, plateau-shaped terrain.
+        /// When <paramref name="arch"/>.islandCount &gt; 1 the single island MASK is replaced by a cluster of
+        /// separate sub-islands (gated: islandCount == 1, the default, leaves every other island type identical).</summary>
         static float[,] BuildHeights(int hmRes, NoiseSettings noise, HeightProfileMode profile,
-                                     int terraceSteps, AnimationCurve curve, float falloff, ShapeParams sp)
+                                     int terraceSteps, AnimationCurve curve, float falloff, ShapeParams sp,
+                                     ArchipelagoSettings arch = null)
         {
             bool ridged = profile == HeightProfileMode.Ridged;
             bool terraced = profile == HeightProfileMode.Terraced;
             int steps = Mathf.Max(2, terraceSteps);
             var heights = new float[hmRes, hmRes];
             const float warpAmp = 0.06f;
+
+            // Archipelago cluster: precompute the sub-island lobes once (gated on islandCount > 1).
+            int subK = (arch != null && arch.islandCount > 1) ? arch.islandCount : 0;
+            SubLobe[] subLobes = (subK > 1) ? BuildSubIslands(subK, arch.spread, arch.sizeVariation, sp) : null;
 
             // Bake the AnimationCurve to a lookup table: AnimationCurve.Evaluate is NOT thread-safe, so it can't
             // be called from the parallel rows. 1024 samples + linear interp is visually identical (exact for a
@@ -163,7 +262,9 @@ namespace IslandSystem
                     float wx = (Mathf.PerlinNoise(fx * 2f + sp.seedOffset + 31.1f, fy * 2f + sp.seedOffset + 17.7f) - 0.5f) * warpAmp;
                     float wy = (Mathf.PerlinNoise(fx * 2f + sp.seedOffset + 71.3f, fy * 2f + sp.seedOffset + 53.9f) - 0.5f) * warpAmp;
                     float baseH = SampleHeightF(fx + wx, fy + wy, noise, sp.seedOffset, ridged);
-                    float mask = IslandShapeMask(x, y, hmRes, falloff, sp);
+                    float mask = subK > 1
+                        ? SubIslandMask(fx, fy, subLobes)
+                        : IslandShapeMask(x, y, hmRes, falloff, sp);
                     float ct = Mathf.Clamp01(baseH * mask) * LUT;
                     int ci = (int)ct; float cf = ct - ci;
                     float h = Mathf.Lerp(lut[ci], lut[Mathf.Min(LUT, ci + 1)], cf);
@@ -567,7 +668,7 @@ namespace IslandSystem
             // drives its ruggedness — compute them from the macro form, shape the relief, then RE-compute the
             // edges from the final heights so the splat/bands line up with the terrain the relief produced.
             float[,] heights = BuildHeights(hmRes, def.noiseSettings, def.heightProfile,
-                def.terraceSteps, def.heightCurve, def.islandFalloff, shape);
+                def.terraceSteps, def.heightCurve, def.islandFalloff, shape, def.archipelago);
             float[] macroEdges = ComputeBandEdges(heights, hmRes, entries, waterlineNormalized);
             ApplyBiomeRelief(heights, hmRes, entries, macroEdges, def, shape, waterlineNormalized);
 

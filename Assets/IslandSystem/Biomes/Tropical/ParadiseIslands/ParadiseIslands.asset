@@ -54,9 +54,12 @@ MonoBehaviour:
   erosionStrength: 0.45
   plainsFlatten: 0.9
   microRoughness: 0.005
-  terrainSmoothing: 0.5
+  terrainSmoothing: 0.38
   archipelago:
-    channels: 2
+    islandCount: 4
+    spread: 0.55
+    sizeVariation: 0.4
+    channels: 0
     channelWidth: 0.08
     channelDepth: 9
   biomes:

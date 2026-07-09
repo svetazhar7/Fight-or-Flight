@@ -30,13 +30,24 @@ namespace IslandSystem
     [Serializable]
     public class ArchipelagoSettings
     {
-        [Tooltip("Number of ocean channels cut through the island. 0 = a single solid island (no fragmentation).")]
+        [Header("Sub-islands (a cluster of separate islands per tile)")]
+        [Tooltip("Break the tile into this many SEPARATE island bodies, each its own dome with open water between " +
+                 "them — the strongest 'archipelago' read. 1 = a single normal island (leaves every other island " +
+                 "type untouched). 3-5 = a little cluster.")]
+        [Range(1, 6)] public int islandCount = 1;
+        [Tooltip("How far the sub-islands spread from the tile centre (0 = tight clump, 1 = spread wide toward the " +
+                 "tile edges). Bigger spread + more count = a looser, more scattered archipelago.")]
+        [Range(0f, 1f)] public float spread = 0.5f;
+        [Tooltip("Random size difference between the sub-islands (0 = all the same size, 1 = a big-and-small mix).")]
+        [Range(0f, 1f)] public float sizeVariation = 0.4f;
+
+        [Header("Channels (cut through ONE island instead — alternative to sub-islands)")]
+        [Tooltip("Number of ocean channels cut through the island. 0 = no channel carving. Use this OR islandCount " +
+                 "(sub-islands give cleaner separation; channels keep one landmass with straits through it).")]
         [Range(0, 4)] public int channels = 0;
-        [Tooltip("Channel WIDTH (as a fraction of the noise field). Wider = broad lagoons between big islands; " +
-                 "thinner = narrow straits.")]
+        [Tooltip("Channel WIDTH (as a fraction of the noise field). Wider = broad lagoons; thinner = narrow straits.")]
         [Range(0.02f, 0.16f)] public float channelWidth = 0.08f;
-        [Tooltip("How deep the channels are cut below sea level (world units). Deeper reads as more fully-separated " +
-                 "islands; shallower leaves sandy tidal flats between them.")]
+        [Tooltip("How deep the channels are cut below sea level (world units).")]
         [Range(2f, 25f)] public float channelDepth = 8f;
     }
 
