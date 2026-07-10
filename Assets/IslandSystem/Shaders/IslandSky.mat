@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: IslandSky
+  m_Shader: {fileID: 4800000, guid: 664affb1ee37f0048a24c836b379a25f, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _HorizonSharp: 2.2
+    - _StarStrength: 0
+    - _SunBrightness: 11.529913
+    - _SunGlow: 0.36030978
+    - _SunSize: 0.9965
+    m_Colors:
+    - _GroundColor: {r: 0.14902128, g: 0.13676602, b: 0.11960848, a: 1}
+    - _HorizonColor: {r: 0.8056715, g: 0.7544608, b: 0.759576, a: 1}
+    - _SunColor: {r: 1, g: 0.92770255, b: 0.8235438, a: 1}
+    - _SunGlowColor: {r: 1, g: 0.72405183, b: 0.50598204, a: 1}
+    - _ZenithColor: {r: 0.17941214, g: 0.37647387, b: 0.7215758, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

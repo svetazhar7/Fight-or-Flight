@@ -54,7 +54,7 @@ namespace IslandSystem
         public float puffLifetime = 180f;
 
         const string SegPrefix = "StormSeg_";
-        const string DefaultMaterialPath = "Assets/StormWall/StormCloud.mat";
+        const string DefaultMaterialPath = "Assets/StormWall/StormCloud_Custom.mat";   // our IslandSystem/Clouds shader
 
         [SerializeField, HideInInspector] float radius;
         /// <summary>Mean ring radius the wall was last built at (world units). Falls back to the mean distance
@@ -171,6 +171,9 @@ namespace IslandSystem
             shape.scale = boxScale;
 
             var rend = go.GetComponent<ParticleSystemRenderer>();
+            // Billboards on purpose: ~8000 storm puffs as sphere meshes would cost millions of tris, and at the
+            // world edge their slow camera-turn is imperceptible. The shared IslandSystem/Clouds shader runs its
+            // billboard path for this material (_UseMesh = 0 on StormCloud_Custom).
             rend.renderMode = ParticleSystemRenderMode.Billboard;
             rend.alignment = ParticleSystemRenderSpace.View;
             rend.sortMode = ParticleSystemSortMode.Distance;

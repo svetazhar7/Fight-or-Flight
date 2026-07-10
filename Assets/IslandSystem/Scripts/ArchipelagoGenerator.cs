@@ -377,6 +377,13 @@ namespace IslandSystem
             if (seabedMaterial != null)
             {
                 renderer.sharedMaterial = seabedMaterial;
+                // The plane's UVs span 0..1 across the WHOLE seabed, and the seabed size adapts to the map — so
+                // tile the texture per-instance (world repeat every ~SeabedTextureTile m) via a property block.
+                float worldSize = size / 10f * 2.4f * 10f;
+                float reps = Mathf.Max(1f, worldSize / SeabedTextureTile);
+                var mpb = new MaterialPropertyBlock();
+                mpb.SetVector("_BaseMap_ST", new Vector4(reps, reps, 0f, 0f));
+                renderer.SetPropertyBlock(mpb);
             }
             else
             {
@@ -386,6 +393,9 @@ namespace IslandSystem
                 renderer.sharedMaterial = new Material(shader) { name = "SeabedStub", color = new Color(0.76f, 0.70f, 0.52f, 1f) };
             }
         }
+
+        /// <summary>World-space repeat (m) of the seabed texture.</summary>
+        const float SeabedTextureTile = 4f;
 
         void CreateOcean(Transform root, float size)
         {
