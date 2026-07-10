@@ -28,6 +28,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _CausticsTex:
+        m_Texture: {fileID: 2800000, guid: 834bd9dcd238d4a4db3ca59e44380836, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _NoiseTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -56,10 +60,10 @@ Material:
     - _CausticSize: 0
     - _CausticStrength: 0
     - _CausticsDepth: 3
-    - _CausticsScale: 0.35
-    - _CausticsSharp: 7.5
+    - _CausticsScale: 0.08
+    - _CausticsSharp: 1.3
     - _CausticsSpeed: 0.5
-    - _CausticsStrength: 0.26
+    - _CausticsStrength: 0.6
     - _DepthMax: 9
     - _FoamCrest: 0.35
     - _FoamDepth: 0.5
@@ -80,6 +84,7 @@ Material:
     - _NormalScale2: 1
     - _NormalSlidingSpeed1: 1
     - _NormalSlidingSpeed2: 1
+    - _NormalStrength: 1.3
     - _PoseidonSineTime: 0.2013233
     - _PoseidonTime: 14265.77
     - _QueueControl: 0
@@ -101,6 +106,7 @@ Material:
     - _WaterDensity: 3.4
     - _WaveHeight: 0.05
     - _WaveScale: 0.15
+    - _WaveShoreFade: 3.5
     - _WaveSpeed: 0.4
     m_Colors:
     - _AbsorbColor: {r: 0.72, g: 0.34, b: 0.52, a: 1}
@@ -112,7 +118,7 @@ Material:
     - _FresnelTint: {r: 0.55, g: 0.72, b: 0.85, a: 1}
     - _NormalSlidingDirection1: {r: 1, g: 1, b: 0, a: 0}
     - _NormalSlidingDirection2: {r: -1, g: -1, b: 0, a: 0}
-    - _ShallowColor: {r: 0.2, g: 0.72, b: 0.72, a: 1}
+    - _ShallowColor: {r: 0.3, g: 0.72, b: 0.72, a: 1}
     - _Specular: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
