@@ -99,7 +99,7 @@ namespace IslandSystem.Sun
 
             float elevationFade = Mathf.Lerp(1f, ctx.rayVisibility, elevationInfluence);
             float haze = Mathf.Lerp(1f, Mathf.Clamp(ctx.atmosphericDensity, 0.25f, 2f), Mathf.Clamp01(hazeInfluence));
-            FinalIntensity = intensity * elevationFade * haze * (ctx.sunIntensity > 0.001f ? 1f : 0f);
+            FinalIntensity = intensity * elevationFade * haze * ctx.cloudRayFade * (ctx.sunIntensity > 0.001f ? 1f : 0f);
         }
     }
 }

@@ -60,6 +60,7 @@ namespace IslandSystem.Sun
 
             float boost = 1f + ctx.haloBoost * scatteringInfluence * ctx.atmosphericDensity;
             boost *= Mathf.Lerp(1f - noonFade, 1f, ctx.horizonFactor);
+            boost *= ctx.cloudGlowFade;   // halo/glow melt away as clouds cover the sun
 
             Color c = tintFromSunColor ? ctx.sunColor : overrideColor;
             c = SunColorUtil.ShiftTemperature(c, temperatureShift);

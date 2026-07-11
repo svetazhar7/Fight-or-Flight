@@ -62,7 +62,7 @@ namespace IslandSystem.Sun
             mat.SetFloat(ID_SunDiscSoft, soft);
             mat.SetFloat(ID_SunLimb, limbDarkening);
             mat.SetFloat(ID_SunRimGlow, rimGlow);
-            mat.SetFloat(ID_SunBrightness, hdrBrightness * Mathf.Lerp(1f - noonBrightnessFade, 1f, ctx.horizonFactor));
+            mat.SetFloat(ID_SunBrightness, hdrBrightness * Mathf.Lerp(1f - noonBrightnessFade, 1f, ctx.horizonFactor) * ctx.cloudGlowFade);
 #if UNITY_EDITOR
             if (!Application.isPlaying) UnityEditor.EditorUtility.SetDirty(mat);
 #endif

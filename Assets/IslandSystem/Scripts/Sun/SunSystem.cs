@@ -104,6 +104,10 @@ namespace IslandSystem.Sun
             float el01 = Mathf.Clamp01(elevation / 60f);
             float horizon = 1f - Mathf.Clamp01(elevation / 25f);
 
+            // Cloud coupling: the cloud-shadow module (when present) tracks how much the clouds cover the sun.
+            var cloudMod = GetComponent<SunCloudShadowModule>();
+            bool clouded = cloudMod != null && cloudMod.isActiveAndEnabled;
+
             Color c = Color.Lerp(tint, SunColorUtil.KelvinToColor(colorTemperature) * tint, temperatureBlend);
             if (colorByElevation != null) c *= colorByElevation.Evaluate(el01);
             c = SunColorUtil.ShiftTemperature(c, horizon * horizonWarmth);
@@ -112,6 +116,7 @@ namespace IslandSystem.Sun
 
             float i = intensity * (intensityByElevation != null ? Mathf.Max(0f, intensityByElevation.Evaluate(el01)) : 1f);
             if (elevation < 0f) i *= Mathf.Clamp01(1f + elevation / 8f);   // dip below horizon fades the light out
+            if (clouded) i *= cloudMod.DiffuseFade;                        // clouds soak up direct light
 
             var rot = Quaternion.Euler(elevation, azimuth, 0f);
             return new SunContext
@@ -126,7 +131,13 @@ namespace IslandSystem.Sun
                 sunIntensity = i,
                 rayVisibility = rayVisibilityByElevation != null ? Mathf.Clamp01(rayVisibilityByElevation.Evaluate(el01)) : 1f,
                 haloBoost = haloBoostByElevation != null ? Mathf.Clamp01(haloBoostByElevation.Evaluate(el01)) : 0f,
-                atmosphericDensity = atmosphericDensity
+                atmosphericDensity = atmosphericDensity,
+                cloudSunVisibility = clouded ? cloudMod.SunVisibility : 1f,
+                cloudDiffuseFade = clouded ? cloudMod.DiffuseFade : 1f,
+                cloudGlowFade = clouded ? cloudMod.GlowFade : 1f,
+                cloudRayFade = clouded ? cloudMod.RayFade : 1f,
+                cloudShadowFade = clouded ? cloudMod.ShadowFade : 1f,
+                cloudAmbientBoost = clouded ? cloudMod.AmbientBoost : 0f
             };
         }
 

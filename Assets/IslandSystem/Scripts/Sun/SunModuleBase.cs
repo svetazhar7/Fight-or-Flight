@@ -20,6 +20,14 @@ namespace IslandSystem.Sun
         public float rayVisibility;      // 0..1 from SunSystem's elevation curve — god-ray master fade
         public float haloBoost;          // 0..1 halo/atmosphere boost from SunSystem's elevation curve
         public float atmosphericDensity; // global thickness dial, scales fog/haze/scatter responses
+
+        // ---- Cloud coupling (1 / 0 defaults when no SunCloudShadowModule is present) ----
+        public float cloudSunVisibility; // 0 = sun fully behind clouds, 1 = fully open (smoothed)
+        public float cloudDiffuseFade;   // multiplier for the direct light intensity
+        public float cloudGlowFade;      // multiplier for disc HDR / halo / wide glow (what feeds Bloom)
+        public float cloudRayFade;       // multiplier for god rays (reaches 0 when covered)
+        public float cloudShadowFade;    // multiplier for shadow strength (overcast = faint soft shadows)
+        public float cloudAmbientBoost;  // additive ambient compensation so overcast stays readable
     }
 
     /// <summary>

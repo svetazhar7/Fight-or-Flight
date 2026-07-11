@@ -109,6 +109,19 @@ namespace IslandSystem
         float _refillTime;
         Vector3 _windVec;
 
+        [Tooltip("Set by SunCloudShadowModule: it reads the occlusion and drives the sun/halo/flare dimming itself, so this component must stop writing to the skybox material directly.")]
+        public bool externalOcclusionDriver;
+
+        /// <summary>Smoothed 0..1 'how much a cloud covers the sun from the main camera' (0 = fully open).</summary>
+        public float SunOcclusion01 => _occSmooth;
+        /// <summary>Baked puff spheres (world xyz + radius), BEFORE wind drift. See <see cref="CurrentWindOffset"/>.</summary>
+        public IReadOnlyList<Vector4> Puffs => _puffs;
+        /// <summary>Uniform wind drift applied to every puff since the last Refill.</summary>
+        public Vector3 CurrentWindOffset => Application.isPlaying ? _windVec * (Time.time - _refillTime) : Vector3.zero;
+        public Vector3 WindVelocity => _windVec;
+        /// <summary>Bumped every Refill so listeners (cloud-shadow cookie bake) know the puff layout changed.</summary>
+        public int PuffVersion { get; private set; }
+
         /// <summary>Dims the skybox sun disc/glow + the lens flare when a cloud sits between the camera and the
         /// sun (ray-vs-puff-spheres on the CPU — the sun shouldn't blaze through a solid cloud).</summary>
         void ApplySunOcclusion()
@@ -145,6 +158,19 @@ namespace IslandSystem
             }
             float target = Mathf.Clamp01(occ) * sunOcclusion;
             _occSmooth = Mathf.MoveTowards(_occSmooth, target, Time.deltaTime * 2.5f);   // no popping
+
+            // The Sun System's cloud module translates this occlusion into disc/halo/ray/shadow fades itself —
+            // in that case leave the skybox material and flare alone (and undo any dim we already applied).
+            if (externalOcclusionDriver)
+            {
+                if (_sunBrightBase > 0f)
+                {
+                    skyMat.SetFloat("_SunBrightness", _sunBrightBase);
+                    skyMat.SetFloat("_SunGlow", _sunGlowBase);
+                    _sunBrightBase = -1f; _sunGlowBase = -1f;
+                }
+                return;
+            }
 
             if (_sunBrightBase > 0f)
             {
@@ -294,6 +320,7 @@ namespace IslandSystem
                     _puffs.Add(new Vector4(p.position.x, p.position.y, p.position.z, size * 0.5f));
                 }
             }
+            PuffVersion++;
             var arr = list.ToArray();
             var main = _ps.main; main.maxParticles = Mathf.Max(main.maxParticles, arr.Length);
             _ps.Clear();

@@ -77,6 +77,9 @@ namespace IslandSystem.Sun
             // ---- Ambient: tint toward the sun and add the sun's own bounce contribution ----
             Color amb = Color.Lerp(ambBase, ambBase * ctx.sunColor, ambientInfluence);
             amb += ctx.sunColor * (ctx.sunIntensity * ambientFromSun * 0.25f);
+            // Overcast compensation: what the clouds take from the direct light comes back as soft diffuse sky
+            // light, so a covered sun reads as a bright-grey day instead of a dimmed one.
+            amb *= 1f + ctx.cloudAmbientBoost;
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = amb * sceneBrightness;
 

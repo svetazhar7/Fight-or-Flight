@@ -25,12 +25,12 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _HaloIntensity: 0.24231404
+    - _HaloIntensity: 0.2103286
     - _HorizonSharp: 2.2319999
     - _StarStrength: 0
-    - _SunBrightness: 5.112
+    - _SunBrightness: 4.4372163
     - _SunDiscSoft: 0.0064800004
-    - _SunGlow: 0.34842542
+    - _SunGlow: 0.30243328
     - _SunGlowExp: 30
     - _SunLimb: 0.35
     - _SunRimGlow: 0.5
@@ -38,7 +38,7 @@ Material:
     m_Colors:
     - _GroundColor: {r: 0.95, g: 0.9, b: 0.85, a: 1}
     - _HaloColor: {r: 1, g: 0.80186224, b: 0.6035762, a: 1}
-    - _HaloParams: {r: 0.99965733, g: 0.99389374, b: 0.65, a: 2.2}
+    - _HaloParams: {r: 0.99965733, g: 0.9953982, b: 0.65, a: 2.2}
     - _HazeColor: {r: 0.94, g: 0.85763305, b: 0.7126266, a: 0.94}
     - _HazeParams: {r: 0.23320001, g: 0.3, b: 1, a: 0}
     - _HorizonColor: {r: 1, g: 0.9, b: 0.72, a: 1}
