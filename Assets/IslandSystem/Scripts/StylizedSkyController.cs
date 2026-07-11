@@ -126,14 +126,19 @@ namespace IslandSystem
             ApplyAll();
         }
 
+        Sun.SunSystem _sunSystem;   // when a SunSystem exists it owns the sun light, disc, halo and atmosphere
+
         [ContextMenu("Reapply")]
         public void ApplyAll()
         {
+            _sunSystem = FindFirstObjectByType<Sun.SunSystem>();
             ApplySun();
             ApplySkybox();
             ApplyAmbientAndFog();
             ApplyClouds();
             ApplyPostFx();
+            // The sun system layers its modulation (ambient tint, fog warmth, halo, rays) on top of our base values.
+            if (_sunSystem != null && _sunSystem.isActiveAndEnabled) _sunSystem.ApplyAll();
         }
 
         [ContextMenu("Reload Preset Values")]
@@ -163,6 +168,7 @@ namespace IslandSystem
 
         void ApplySun()
         {
+            if (_sunSystem != null && _sunSystem.isActiveAndEnabled) return;   // SunSystem owns the light
             if (sun == null) return;
             sun.transform.rotation = Quaternion.Euler(sunAngle, sunAzimuth, 0f);
             sun.color = sunColor;
@@ -184,11 +190,15 @@ namespace IslandSystem
             // Gradient softness: a low _HorizonSharp lets the horizon colour wash far up the dome; haze softer still.
             float sharp = Mathf.Lerp(4.5f, 0.7f, skyGradientStrength) / (1f + horizonHaze);
             skyboxMaterial.SetFloat(ID_HorizonSharp, Mathf.Clamp(sharp, 0.5f, 8f));
-            skyboxMaterial.SetColor(ID_SunColor, sunColor);
-            skyboxMaterial.SetFloat(ID_SunSize, Mathf.Lerp(0.9995f, 0.988f, sunDiscSize));
-            skyboxMaterial.SetFloat(ID_SunBrightness, sunHdrBrightness);
-            skyboxMaterial.SetFloat(ID_SunGlow, sunGlowAmount);
-            skyboxMaterial.SetColor(ID_SunGlowColor, sunGlowColor);
+            if (_sunSystem == null || !_sunSystem.isActiveAndEnabled)
+            {
+                // Legacy path: no SunSystem — this controller paints the sun disc/glow itself.
+                skyboxMaterial.SetColor(ID_SunColor, sunColor);
+                skyboxMaterial.SetFloat(ID_SunSize, Mathf.Lerp(0.9995f, 0.988f, sunDiscSize));
+                skyboxMaterial.SetFloat(ID_SunBrightness, sunHdrBrightness);
+                skyboxMaterial.SetFloat(ID_SunGlow, sunGlowAmount);
+                skyboxMaterial.SetColor(ID_SunGlowColor, sunGlowColor);
+            }
             skyboxMaterial.SetFloat(ID_StarStrength, 0f);
             if (RenderSettings.skybox != skyboxMaterial) RenderSettings.skybox = skyboxMaterial;
 #if UNITY_EDITOR
