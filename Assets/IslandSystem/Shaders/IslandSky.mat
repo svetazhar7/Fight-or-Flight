@@ -25,16 +25,16 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _HorizonSharp: 2.2
+    - _HorizonSharp: 2.2319999
     - _StarStrength: 0
-    - _SunBrightness: 11.529913
-    - _SunGlow: 0.36030978
-    - _SunSize: 0.9965
+    - _SunBrightness: 10
+    - _SunGlow: 0.35
+    - _SunSize: 0.995475
     m_Colors:
-    - _GroundColor: {r: 0.14902128, g: 0.13676602, b: 0.11960848, a: 1}
-    - _HorizonColor: {r: 0.8056715, g: 0.7544608, b: 0.759576, a: 1}
-    - _SunColor: {r: 1, g: 0.92770255, b: 0.8235438, a: 1}
-    - _SunGlowColor: {r: 1, g: 0.72405183, b: 0.50598204, a: 1}
-    - _ZenithColor: {r: 0.17941214, g: 0.37647387, b: 0.7215758, a: 1}
+    - _GroundColor: {r: 0.95, g: 0.9, b: 0.85, a: 1}
+    - _HorizonColor: {r: 1, g: 0.9, b: 0.72, a: 1}
+    - _SunColor: {r: 1, g: 0.95, b: 0.88, a: 1}
+    - _SunGlowColor: {r: 1, g: 0.85, b: 0.6, a: 1}
+    - _ZenithColor: {r: 0.55, g: 0.7200001, b: 0.96, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

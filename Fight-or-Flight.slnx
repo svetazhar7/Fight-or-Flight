@@ -1,0 +1,15 @@
+﻿<Solution>
+  <Project Path="FishNet.Runtime.csproj" />
+  <Project Path="SynapseSocket.csproj" />
+  <Project Path="Pinwheel.Poseidon.Runtime.csproj" />
+  <Project Path="GameKit.Dependencies.csproj" />
+  <Project Path="DistantLands.Cozy.Editor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="DistantLands.Cozy.Runtime.csproj" />
+  <Project Path="FishNet.Codegen.Cecil.csproj" />
+  <Project Path="Pinwheel.Poseidon.Editor.csproj" />
+  <Project Path="Unity.FishNet.Codegen.csproj" />
+  <Project Path="FishNet.Demos.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="DistantLands.Cozy.Plume.Runtime.csproj" />
+</Solution>
