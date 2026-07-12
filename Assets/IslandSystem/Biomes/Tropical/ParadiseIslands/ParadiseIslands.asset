@@ -57,8 +57,8 @@ MonoBehaviour:
   terrainSmoothing: 0.38
   archipelago:
     islandCount: 4
-    spread: 0.55
-    sizeVariation: 0.4
+    spread: 0.1
+    sizeVariation: 0.675
     channels: 0
     channelWidth: 0.08
     channelDepth: 9
