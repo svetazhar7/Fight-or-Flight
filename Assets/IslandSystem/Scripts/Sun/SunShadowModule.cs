@@ -59,11 +59,11 @@ namespace IslandSystem.Sun
 
         [Header("Artistic")]
         [Range(0f, 1f), Tooltip("Shadow darkness before the modifiers below.")]
-        public float strength = 0.72f;
+        public float strength = 0.85f;
         [Range(0f, 1f), Tooltip("Master opacity multiplied over strength.")]
         public float opacity = 1f;
         [Range(0.25f, 2f), Tooltip("Contrast of the shadow term around mid-grey (1 = neutral).")]
-        public float contrast = 1f;
+        public float contrast = 1.12f;
         public bool softShadows = true;
         [Range(0f, 2f), Tooltip("Penumbra feel: widens the filtered edge via normal bias (0 = tight, 2 = dreamy).")]
         public float penumbraSize = 0.8f;
@@ -76,9 +76,9 @@ namespace IslandSystem.Sun
         public Color shadowColor = Color.white;
         [Range(-1f, 1f), Tooltip("Warm/cool fine-shift of the fill.")]
         public float temperature = 0f;
-        [Range(0f, 1.5f)] public float saturation = 1f;
+        [Range(0f, 1.5f)] public float saturation = 1.12f;
         [Range(0f, 0.5f), Tooltip("Minimum ambient luminance in shadow — shadows can NEVER crush to black.")]
-        public float shadowLift = 0.09f;
+        public float shadowLift = 0.07f;
         [Range(0f, 2f), Tooltip("Brightness of the lift floor.")]
         public float liftBrightness = 1f;
 
@@ -243,9 +243,12 @@ namespace IslandSystem.Sun
                     contactStrength = 0.1f;
                     break;
                 case Profile.High:
-                    resolution = ShadowRes._4096; shadowDistance = 180f; cascadeCount = 4; cascadeBlend = 0.2f;
+                    // 8192 / 150 m = ~2x the texels-per-metre of the old 4096 / 180. Denser texels are the direct
+                    // cure for sub-texel SWIM on alpha-clipped crowns (smaller texel = smaller per-frame snap step),
+                    // and the tighter distance both sharpens near shadows and bounds the stable tree caster set.
+                    resolution = ShadowRes._8192; shadowDistance = 150f; cascadeCount = 4; cascadeBlend = 0.25f;
                     filteringQuality = SoftShadowQuality.High; stabilizeCascades = true; autoCascades = true;
-                    contactStrength = 0.15f;
+                    contactStrength = 0.2f;
                     break;
                 case Profile.Ultra:
                     resolution = ShadowRes._8192; shadowDistance = 300f; cascadeCount = 4; cascadeBlend = 0.25f;

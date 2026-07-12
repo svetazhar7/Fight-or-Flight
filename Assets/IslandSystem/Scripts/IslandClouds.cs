@@ -152,7 +152,10 @@ namespace IslandSystem
                 float distSq = c.sqrMagnitude - along * along;
                 if (distSq < r * r)
                 {
-                    occ += 0.5f * (1f - Mathf.Sqrt(Mathf.Max(0f, distSq)) / r);   // deeper through the puff = more cover
+                    // FULL weight (was 0.5): a puff whose centre sits on the camera→sun line must be able to occlude
+                    // the sun on its own, so a single cloud over the disc drives occ→1 — that is what actually kills
+                    // the god rays / halo / bloom and drops the direct light. Overlapping cluster puffs saturate fast.
+                    occ += 1f - Mathf.Sqrt(Mathf.Max(0f, distSq)) / r;   // deeper through the puff = more cover
                     if (occ >= 1f) { occ = 1f; break; }
                 }
             }

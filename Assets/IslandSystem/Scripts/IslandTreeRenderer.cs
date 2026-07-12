@@ -35,6 +35,14 @@ namespace IslandSystem
 
         [Header("Shadows")]
         public bool castShadows = true;
+        [Tooltip("STABLE SHADOWS: trees cast shadows from a SEPARATE, yaw-independent draw culled only by distance " +
+                 "to the camera (never by the camera frustum, LOD thinning, terrain occlusion, or impostor swap). " +
+                 "That is what keeps tree-crown shadows from crawling / rebuilding while the player walks and turns. " +
+                 "0 = auto: follow the URP shadow distance so the caster set matches exactly what the shadow map covers.")]
+        public float shadowCasterRange = 0f;
+        [Tooltip("Extra metres added to the shadow caster radius so a tree whose TRUNK is just past the shadow " +
+                 "distance still drops its long low-sun canopy shadow into the visible range.")]
+        [Range(0f, 60f)] public float shadowRangeMargin = 20f;
 
         [Header("Distance density LOD (metres)")]
         [Tooltip("Full detail within this distance.")]
@@ -73,6 +81,7 @@ namespace IslandSystem
             public Mesh mesh; public int submesh; public Material material;
             public NativeArray<Matrix4x4> matrices; public NativeArray<float3> centers; public NativeArray<float> rand;
             public float radius; public float topOffset; public Bounds bounds; public NativeList<Matrix4x4> vis;
+            public NativeList<Matrix4x4> visSh;   // SHADOW casters: separate, yaw-independent distance cull (stable set)
         }
         readonly List<Batch> _batches = new List<Batch>();
         static readonly Plane[] _planes = new Plane[6];
@@ -83,6 +92,7 @@ namespace IslandSystem
         NativeArray<float4> _planesNA;         // 6 frustum planes, refilled per camera
         NativeList<JobHandle> _cullHandles;    // one handle per batch scheduled this frame
         readonly List<int> _scheduledBatches = new List<int>();
+        readonly List<int> _scheduledShadow = new List<int>();   // batches with a shadow-caster cull scheduled this frame
 
         // ---- far-LOD impostors (one billboard set per species) ----
         struct ImpostorSet
@@ -369,7 +379,8 @@ namespace IslandSystem
                             mesh = mesh, submesh = s, material = mat,
                             matrices = matrices, centers = centers, rand = rand,
                             radius = radius, topOffset = topOffset, bounds = b,
-                            vis = new NativeList<Matrix4x4>(n, Allocator.Persistent)
+                            vis = new NativeList<Matrix4x4>(n, Allocator.Persistent),
+                            visSh = new NativeList<Matrix4x4>(n, Allocator.Persistent)
                         });
                     }
                 }
@@ -427,7 +438,6 @@ namespace IslandSystem
 
             Vector3 camPos = cam.transform.position;
             var camPosF = new float3(camPos.x, camPos.y, camPos.z);
-            var shadow = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
             float span = Mathf.Max(1f, lodFar - lodNear);
             float near2 = lodNear * lodNear;
             float occlMin2 = occlusionMinDistance * occlusionMinDistance;
@@ -442,7 +452,20 @@ namespace IslandSystem
             // Schedule all cull jobs (mesh + impostor) then wait ONCE — the ~34k-instance work runs on worker threads.
             _scheduledBatches.Clear();
             _scheduledImp.Clear();
+            _scheduledShadow.Clear();
             _cullHandles.Clear();
+
+            // SHADOW caster radius: follow the URP shadow distance so the stable caster set matches exactly the
+            // ground the shadow map covers (nothing drawn that can't land on screen; nothing missing that can).
+            float shadowR = shadowCasterRange > 0.01f ? shadowCasterRange : 150f;
+            if (shadowCasterRange <= 0.01f)
+            {
+                var urp = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset;
+                if (urp != null) shadowR = urp.shadowDistance;
+            }
+            shadowR += shadowRangeMargin;
+            float shadowR2 = shadowR * shadowR;
+            bool doShadowPass = castShadows && shadowR2 > 1f;
 
             for (int bi = 0; bi < _batches.Count; bi++)
             {
@@ -457,6 +480,7 @@ namespace IslandSystem
                     camPos = camPosF, radius = b.radius, topOffset = b.topOffset,
                     lodNear = lodNear, span = span, lodMinKeep = lodMinKeep, near2 = near2,
                     minDist2 = 0f, maxDist2 = meshMax,
+                    useFrustum = 1,
                     doOcclusion = doOcclusion, occlMin2 = occlMin2, occlusionBias = occlusionBias, hf = _hf,
                     outList = b.vis.AsParallelWriter()
                 };
@@ -479,11 +503,41 @@ namespace IslandSystem
                         camPos = camPosF, radius = im.radius, topOffset = 0f,
                         lodNear = lodNear, span = span, lodMinKeep = lodMinKeep, near2 = near2,
                         minDist2 = imp2, maxDist2 = float.MaxValue,
+                        useFrustum = 1,
                         doOcclusion = doOcclusion, occlMin2 = occlMin2, occlusionBias = occlusionBias, hf = _hf,
                         outList = im.vis.AsParallelWriter()
                     };
                     _cullHandles.Add(job.Schedule(im.matrices.Length, 64));
                     _scheduledImp.Add(ii);
+                }
+            }
+
+            // SHADOW casters — a SEPARATE cull per batch using the FULL-DETAIL mesh, culled ONLY by distance to the
+            // camera (useFrustum=0, near2=MAX so no LOD thinning, no terrain occlusion). Yaw-independent and
+            // LOD-independent, so the set of shadow-casting trees does not change when the player turns or as a tree
+            // crosses an LOD / impostor line — which is what stops the tree-crown shadows from crawling / rebuilding.
+            if (doShadowPass)
+            {
+                for (int bi = 0; bi < _batches.Count; bi++)
+                {
+                    var b = _batches[bi];
+                    if (b.mesh == null || b.material == null || !b.matrices.IsCreated) continue;
+                    // Cheap batch reject: skip whole island clouds fully outside the shadow radius.
+                    if (b.bounds.SqrDistance(camPos) > shadowR2) continue;
+
+                    b.visSh.Clear();
+                    var job = new TreeCullJob
+                    {
+                        matrices = b.matrices, centers = b.centers, rand = b.rand, planes = _planesNA,
+                        camPos = camPosF, radius = b.radius, topOffset = 0f,
+                        lodNear = lodNear, span = span, lodMinKeep = 1f, near2 = float.MaxValue,
+                        minDist2 = 0f, maxDist2 = shadowR2,
+                        useFrustum = 0,
+                        doOcclusion = 0, occlMin2 = 0f, occlusionBias = 0f, hf = _hf,
+                        outList = b.visSh.AsParallelWriter()
+                    };
+                    _cullHandles.Add(job.Schedule(b.matrices.Length, 64));
+                    _scheduledShadow.Add(bi);
                 }
             }
 
@@ -499,11 +553,30 @@ namespace IslandSystem
 
                 var rp = new RenderParams(b.material)
                 {
+                    // Camera view does NOT cast — the stable shadow-only pass below owns shadow casting.
                     camera = cam, worldBounds = b.bounds,
-                    shadowCastingMode = shadow, receiveShadows = true,
+                    shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true,
                     layer = FoliageLayer >= 0 ? FoliageLayer : 0
                 };
                 var arr = b.vis.AsArray();
+                for (int start = 0; start < vis; start += 1023)
+                    Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, arr, Mathf.Min(1023, vis - start), start);
+            }
+
+            // draw the stable shadow casters (ShadowsOnly — full mesh, distance-culled, no frustum/LOD/impostor churn)
+            for (int si = 0; si < _scheduledShadow.Count; si++)
+            {
+                var b = _batches[_scheduledShadow[si]];
+                int vis = b.visSh.Length;
+                if (vis == 0) continue;
+
+                var rp = new RenderParams(b.material)
+                {
+                    camera = cam, worldBounds = b.bounds,
+                    shadowCastingMode = ShadowCastingMode.ShadowsOnly, receiveShadows = false,
+                    layer = FoliageLayer >= 0 ? FoliageLayer : 0
+                };
+                var arr = b.visSh.AsArray();
                 for (int start = 0; start < vis; start += 1023)
                     Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, arr, Mathf.Min(1023, vis - start), start);
             }
@@ -552,6 +625,7 @@ namespace IslandSystem
                 if (b.centers.IsCreated) b.centers.Dispose();
                 if (b.rand.IsCreated) b.rand.Dispose();
                 if (b.vis.IsCreated) b.vis.Dispose();
+                if (b.visSh.IsCreated) b.visSh.Dispose();
             }
             for (int i = 0; i < _impostors.Count; i++)
             {

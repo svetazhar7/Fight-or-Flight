@@ -33,7 +33,7 @@ namespace IslandSystem.Sun
         [Range(0f, 1f), Tooltip("How strongly a cloud between the camera and the sun dims the whole sun stack.")]
         public float sunOcclusionStrength = 1f;
         [Range(0f, 1f), Tooltip("How much overall cloud COVERAGE dims the sun even without direct occlusion (overcast sky).")]
-        public float coverageOvercast = 0.3f;
+        public float coverageOvercast = 0.55f;
         [Range(0.05f, 5f), Tooltip("Fade speed of the direct light / shadows (per second).")]
         public float sunFadeSpeed = 0.8f;
         [Range(0.05f, 5f), Tooltip("Fade speed of the god rays — slightly faster feels right.")]
@@ -43,13 +43,13 @@ namespace IslandSystem.Sun
 
         [Header("Light response when covered")]
         [Range(0f, 1f), Tooltip("Direct light intensity floor when the sun is fully covered (diffuse light through the cloud).")]
-        public float diffuseFloor = 0.55f;
+        public float diffuseFloor = 0.3f;
         [Range(0f, 1f), Tooltip("Disc/halo/bloom floor when fully covered.")]
         public float glowFloor = 0.12f;
         [Range(0f, 1f), Tooltip("Shadow strength floor when fully covered (overcast = faint soft shadows).")]
         public float shadowFloor = 0.25f;
         [Range(0f, 1f), Tooltip("Ambient boost when covered — the light the clouds absorb comes back as soft sky light.")]
-        public float ambientCompensation = 0.35f;
+        public float ambientCompensation = 0.45f;
 
         [Header("Cloud shadows (light cookie on the sun)")]
         public bool cloudShadowsEnabled = true;

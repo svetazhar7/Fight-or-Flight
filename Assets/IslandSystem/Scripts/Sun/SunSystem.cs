@@ -86,6 +86,9 @@ namespace IslandSystem.Sun
 
             if (sunLight != null)
             {
+                // The sun is a DISTANT source: force Directional so every shadow is parallel (orthographic cascades)
+                // and lighting is uniform across the island — never the diverging shadows / falloff of a point light.
+                if (sunLight.type != LightType.Directional) sunLight.type = LightType.Directional;
                 sunLight.transform.rotation = Quaternion.Euler(elevation, azimuth, 0f);
                 sunLight.color = ctx.sunColor;
                 sunLight.intensity = ctx.sunIntensity;

@@ -25,27 +25,27 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _HaloIntensity: 0.2103286
+    - _HaloIntensity: 0.13337009
     - _HorizonSharp: 2.2319999
     - _StarStrength: 0
-    - _SunBrightness: 4.4372163
-    - _SunDiscSoft: 0.0064800004
-    - _SunGlow: 0.30243328
+    - _SunBrightness: 3.7521002
+    - _SunDiscSoft: 0.006
+    - _SunGlow: 0.19177398
     - _SunGlowExp: 30
     - _SunLimb: 0.35
     - _SunRimGlow: 0.5
-    - _SunSize: 0.9967719
+    - _SunSize: 0.9969485
     m_Colors:
     - _GroundColor: {r: 0.95, g: 0.9, b: 0.85, a: 1}
-    - _HaloColor: {r: 1, g: 0.80186224, b: 0.6035762, a: 1}
-    - _HaloParams: {r: 0.99965733, g: 0.9953982, b: 0.65, a: 2.2}
-    - _HazeColor: {r: 0.94, g: 0.85763305, b: 0.7126266, a: 0.94}
-    - _HazeParams: {r: 0.23320001, g: 0.3, b: 1, a: 0}
+    - _HaloColor: {r: 0.93487525, g: 0.8773813, b: 0.8246749, a: 1}
+    - _HaloParams: {r: 0.99965733, g: 0.99814886, b: 0.65, a: 2.2}
+    - _HazeColor: {r: 0.94, g: 0.8601, b: 0.71628004, a: 0.94}
+    - _HazeParams: {r: 0.22000001, g: 0.3, b: 1, a: 0}
     - _HorizonColor: {r: 1, g: 0.9, b: 0.72, a: 1}
-    - _HorizonGlowColor: {r: 1, g: 0.7837816, b: 0.567667, a: 1}
-    - _HorizonGlowParams: {r: 0.46981803, g: 0.18, b: 0, a: 0}
-    - _SunColor: {r: 1, g: 0.8338102, b: 0.6600779, a: 1}
-    - _SunGlowColor: {r: 1, g: 0.80186224, b: 0.6035762, a: 1}
+    - _HorizonGlowColor: {r: 0.93487525, g: 0.85026926, b: 0.75687534, a: 1}
+    - _HorizonGlowParams: {r: 0.31325, g: 0.18, b: 0, a: 0}
+    - _SunColor: {r: 0.93487525, g: 0.9045418, b: 0.88008755, a: 1}
+    - _SunGlowColor: {r: 0.93487525, g: 0.8773813, b: 0.8246749, a: 1}
     - _ZenithColor: {r: 0.55, g: 0.7200001, b: 0.96, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

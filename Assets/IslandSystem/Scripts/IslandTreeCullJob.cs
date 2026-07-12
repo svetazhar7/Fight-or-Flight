@@ -28,6 +28,7 @@ namespace IslandSystem
         public float radius, topOffset;                 // per-batch: cull sphere radius, canopy height for the sight-line
         public float lodNear, span, lodMinKeep, near2;  // distance density LOD
         public float minDist2, maxDist2;                // distance window: mesh = [0..impostor], impostor = [impostor..∞]
+        public int useFrustum;                          // 1 = camera view (frustum + LOD + occlusion); 0 = SHADOW casters
         public int doOcclusion;
         public float occlMin2, occlusionBias;
         public HeightField hf;                          // island height for occlusion (inner array is [ReadOnly])
@@ -38,17 +39,22 @@ namespace IslandSystem
         {
             float3 c = centers[i];
 
-            // per-instance frustum (sphere) cull
-            for (int p = 0; p < 6; p++)
+            // per-instance frustum (sphere) cull — SKIPPED for shadow casters. Shadows must come from geometry that
+            // is off-screen / behind the camera too; culling casters to the camera frustum is what makes tree
+            // shadows pop in and out as the player turns. Shadow casters use a pure yaw-independent distance cull.
+            if (useFrustum != 0)
             {
-                float4 pl = planes[p];
-                if (math.dot(pl.xyz, c) + pl.w < -radius) return;
+                for (int p = 0; p < 6; p++)
+                {
+                    float4 pl = planes[p];
+                    if (math.dot(pl.xyz, c) + pl.w < -radius) return;
+                }
             }
 
             float dx = c.x - camPos.x, dz = c.z - camPos.z;
             float d2 = dx * dx + dz * dz;
-            if (d2 < minDist2 || d2 > maxDist2) return;  // distance window (mesh near / impostor far split)
-            if (d2 > near2)                              // distance density LOD
+            if (d2 < minDist2 || d2 > maxDist2) return;  // distance window (mesh near / impostor far / shadow radius)
+            if (d2 > near2)                              // distance density LOD (near2 = MAX for shadows = never thin out)
             {
                 float t = math.saturate((math.sqrt(d2) - lodNear) / span);
                 float keep = math.lerp(1f, lodMinKeep, t);
