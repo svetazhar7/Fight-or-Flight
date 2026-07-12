@@ -15,9 +15,9 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.94, g: 0.8601, b: 0.71628004, a: 0.94}
+  m_FogColor: {r: 0.68, g: 0.76, b: 0.84, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.00024999998
+  m_FogDensity: 0.001
   m_LinearFogStart: 60
   m_LinearFogEnd: 900
   m_AmbientSkyColor: {r: 0.7446961, g: 0.7019873, b: 0.6625042, a: 0.77289236}
@@ -36131,6 +36131,93 @@ Terrain:
   m_EnableTreesAndDetailsRayTracing: 0
   m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
+--- !u!1 &514679124
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 514679126}
+  - component: {fileID: 514679125}
+  m_Layer: 0
+  m_Name: Color Grading
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &514679125
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 514679124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5cd4188745a48ee4ca9dd44616563673, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.Sun.SunnyColorGrading
+  effectStrength: 1
+  exposure: 0.87
+  postExposure: -0.51
+  contrast: 24
+  saturation: 6
+  hueShift: 0
+  colorFilter: {r: 1, g: 1, b: 1, a: 1}
+  tonemapping: 1
+  whiteBalanceTemperature: 0
+  whiteBalanceTint: 0
+  liftColor: {r: 1, g: 1, b: 1, a: 1}
+  lift: 0
+  gammaColor: {r: 1, g: 1, b: 1, a: 1}
+  gamma: 0
+  gainColor: {r: 1, g: 1, b: 1, a: 1}
+  gain: 0
+  shadowsColor: {r: 1, g: 1, b: 1, a: 1}
+  shadowsOffset: 0
+  midtonesColor: {r: 1, g: 1, b: 1, a: 1}
+  midtonesOffset: 0
+  highlightsColor: {r: 1, g: 1, b: 1, a: 1}
+  highlightsOffset: 0
+  highlightWarmth: 0.4
+  warmHighlightStrength: 1
+  warmColor: {r: 1, g: 0.87, b: 0.62, a: 1}
+  shadowCoolness: 0.22
+  coolColor: {r: 0.93, g: 0.97, b: 1.06, a: 1}
+  warmSaturation: 0.18
+  coldColorPreservation: 0.85
+  bluePreservation: 0.85
+  skyColorProtection: 0.9
+  localContrast: 0.15
+  highlightCompression: 0.35
+  shadowLift: 0.03
+  shadowLiftColor: {r: 0.85, g: 0.9, b: 1, a: 1}
+  bloomIntensity: 1.38
+  bloomThreshold: 1
+  bloomScatter: 0.55
+  bloomRadius: 1.9
+  bloomTint: {r: 1, g: 0.85, b: 0.58, a: 1}
+  bloomWarmth: 0.7
+  bloomColorIsolation: 0.6
+  postFxVolume: {fileID: 1292236143}
+--- !u!4 &514679126
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 514679124}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &528909471
 GameObject:
   m_ObjectHideFlags: 0
@@ -41777,7 +41864,7 @@ Transform:
   m_GameObject: {fileID: 614308857}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 5.4879847, z: 0}
+  m_LocalPosition: {x: 0, y: 5.1260533, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -175544,7 +175631,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &2091052254
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -175552,7 +175639,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2091052253}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e814188991ed97e4a82fcc56729b1d12, type: 3}
   m_Name: 
@@ -197623,3 +197710,4 @@ SceneRoots:
   - {fileID: 819485801}
   - {fileID: 324458179}
   - {fileID: 1612983531}
+  - {fileID: 514679126}

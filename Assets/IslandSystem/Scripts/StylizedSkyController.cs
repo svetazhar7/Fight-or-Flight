@@ -239,6 +239,11 @@ namespace IslandSystem
 
         void ApplyPostFx()
         {
+            // SunnyColorGrading owns the whole post look when present (selective warm grade + custom bloom) —
+            // writing our global warm filter on top of it would be exactly the "yellow veil" it exists to kill.
+            var grading = FindFirstObjectByType<Sun.SunnyColorGrading>();
+            if (grading != null && grading.isActiveAndEnabled) { grading.ApplyAll(); return; }
+
             var profile = postFxVolume != null ? postFxVolume.sharedProfile : null;
             if (profile == null) return;
 
