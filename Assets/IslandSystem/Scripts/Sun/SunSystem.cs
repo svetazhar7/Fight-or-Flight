@@ -162,9 +162,10 @@ namespace IslandSystem.Sun
                 new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) });
             intensityByElevation = new AnimationCurve(
                 new Keyframe(0f, 0.55f), new Keyframe(0.2f, 0.85f), new Keyframe(0.5f, 1f), new Keyframe(1f, 1f));
+            // Rays stay visible at ANY sun height (was crushed to 0.06 at the zenith). The low-sun boost remains,
+            // but a high/overhead sun still casts shafts — the volumetric module needs this to work at noon.
             rayVisibilityByElevation = new AnimationCurve(
-                new Keyframe(0f, 1f), new Keyframe(0.3f, 0.8f), new Keyframe(0.55f, 0.35f),
-                new Keyframe(0.75f, 0.12f), new Keyframe(1f, 0.06f));
+                new Keyframe(0f, 1f), new Keyframe(0.3f, 0.92f), new Keyframe(0.6f, 0.82f), new Keyframe(1f, 0.75f));
             haloBoostByElevation = new AnimationCurve(
                 new Keyframe(0f, 1f), new Keyframe(0.35f, 0.5f), new Keyframe(1f, 0.15f));
             _defaultsSet = true;

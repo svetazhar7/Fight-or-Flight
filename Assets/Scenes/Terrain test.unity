@@ -15,9 +15,9 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.68, g: 0.76, b: 0.84, a: 1}
+  m_FogColor: {r: 0.94, g: 0.8601, b: 0.71628004, a: 0.94}
   m_FogMode: 3
-  m_FogDensity: 0.0006
+  m_FogDensity: 0.00024999998
   m_LinearFogStart: 60
   m_LinearFogEnd: 900
   m_AmbientSkyColor: {r: 0.7446961, g: 0.7019873, b: 0.6625042, a: 0.77289236}
@@ -41896,7 +41896,7 @@ Transform:
   m_GameObject: {fileID: 614308857}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 3.1527085, z: 0}
+  m_LocalPosition: {x: 0, y: 5.379052, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -142926,6 +142926,7 @@ GameObject:
   - component: {fileID: 1612983526}
   - component: {fileID: 1612983525}
   - component: {fileID: 1612983532}
+  - component: {fileID: 1612983533}
   m_Layer: 0
   m_Name: Sun System
   m_TagString: Untagged
@@ -143205,7 +143206,7 @@ MonoBehaviour:
       outWeight: 0
     - serializedVersion: 3
       time: 0.3
-      value: 0.8
+      value: 0.92
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -143213,17 +143214,8 @@ MonoBehaviour:
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.55
-      value: 0.35
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 0.75
-      value: 0.12
+      time: 0.6
+      value: 0.82
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -143232,7 +143224,7 @@ MonoBehaviour:
       outWeight: 0
     - serializedVersion: 3
       time: 1
-      value: 0.06
+      value: 0.75
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -143328,6 +143320,31 @@ MonoBehaviour:
   cloudShadowDensity: 1
   sunHeightInfluence: 0.5
   cookieResolution: 256
+--- !u!114 &1612983533
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1612983524}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38615bcd0efcb7449848233648f2223a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IslandSystem.Sun.SunVolumetricModule
+  intensity: 0.34
+  density: 1.05
+  tintFromSunColor: 1
+  overrideColor: {r: 1, g: 0.77971673, b: 0.25471687, a: 1}
+  saturation: 1
+  anisotropy: 0.62
+  ambientScatter: 0.22
+  maxDistance: 200
+  heightFalloff: 0.012
+  groundHeight: 60
+  steps: 40
+  blurIterations: 1
+  downsample: 1
 --- !u!1 &1628480740
 GameObject:
   m_ObjectHideFlags: 0
@@ -175671,7 +175688,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2091052253}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e814188991ed97e4a82fcc56729b1d12, type: 3}
   m_Name: 
