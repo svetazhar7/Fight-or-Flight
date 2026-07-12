@@ -28,6 +28,15 @@ namespace IslandSystem.Sun
 
         public enum ToneMode { None, Neutral, ACES }
 
+        /// <summary>One Lightroom-style colour band: hue rotate / saturation / luminance for a single hue range.</summary>
+        [System.Serializable]
+        public struct HslBand
+        {
+            [Range(-1f, 1f), Tooltip("Hue shift (~±36°).")] public float hue;
+            [Range(-1f, 1f), Tooltip("Saturation (±100%).")] public float saturation;
+            [Range(-1f, 1f), Tooltip("Luminance (±50%).")] public float luminance;
+        }
+
         [Header("Master")]
         [Range(0f, 1f), Tooltip("Blend of the whole selective grade + custom bloom (0 = bypass the custom pass).")]
         public float effectStrength = 1f;
@@ -98,14 +107,14 @@ namespace IslandSystem.Sun
         public Color shadowLiftColor = new Color(0.85f, 0.9f, 1f);
 
         [Header("Bloom (custom warm bloom — replaces URP bloom)")]
-        [Range(0f, 3f), Tooltip("Bloom brightness in the composite.")]
-        public float bloomIntensity = 0.65f;
-        [Range(0f, 3f), Tooltip("HDR threshold — what counts as 'bright enough to glow'.")]
-        public float bloomThreshold = 1f;
+        [Range(0f, 4f), Tooltip("Bloom brightness in the composite.")]
+        public float bloomIntensity = 1.4f;
+        [Range(0f, 3f), Tooltip("HDR threshold — what counts as 'bright enough to glow'. Lower = more of the image glows.")]
+        public float bloomThreshold = 0.75f;
         [Range(0f, 1f), Tooltip("How far the glow spreads (extra blur passes + growing radius).")]
-        public float bloomScatter = 0.55f;
-        [Range(0.25f, 3f), Tooltip("Base blur radius in texels — the size of the soft halo.")]
-        public float bloomRadius = 1.2f;
+        public float bloomScatter = 0.7f;
+        [Range(0.25f, 4f), Tooltip("Base blur radius in texels — the size of the soft halo.")]
+        public float bloomRadius = 1.8f;
         [Tooltip("Golden tint of the bloom on WARM sources (cold sources keep their own colour).")]
         public Color bloomTint = new Color(1f, 0.85f, 0.58f);
         [Range(0f, 1f), Tooltip("How strongly warm sources take the golden tint.")]
@@ -113,17 +122,37 @@ namespace IslandSystem.Sun
         [Range(0f, 1f), Tooltip("Colour isolation: 1 = only warm pixels bloom (sky/cold brights stop glowing entirely).")]
         public float bloomColorIsolation = 0.6f;
 
+        [Header("Per-colour HSL (Lightroom-style — each hue band independent)")]
+        public HslBand red = new HslBand();
+        public HslBand orange = new HslBand();
+        public HslBand yellow = new HslBand();
+        public HslBand green = new HslBand();
+        public HslBand aqua = new HslBand();
+        public HslBand blue = new HslBand();
+        public HslBand purple = new HslBand();
+        public HslBand magenta = new HslBand();
+
         [Header("Scene reference")]
         [Tooltip("URP post volume. Auto-found from StylizedSkyController or the scene when empty.")]
         public Volume postFxVolume;
+
+        static readonly int ID_HSL = Shader.PropertyToID("_SG_HSL");
+        readonly Vector4[] _hsl = new Vector4[8];
 
         void OnEnable() { Active = this; ApplyAll(); }
         void OnDisable() { if (Active == this) Active = null; }
         void OnValidate() { if (isActiveAndEnabled) ApplyAll(); }
 
+        void SetBand(int i, HslBand b) => _hsl[i] = new Vector4(b.hue, b.saturation, b.luminance, 0f);
+
         [ContextMenu("Reapply")]
         public void ApplyAll()
         {
+            // Per-colour HSL is a set of shader globals (constant per tweak — no per-frame upload needed).
+            SetBand(0, red); SetBand(1, orange); SetBand(2, yellow); SetBand(3, green);
+            SetBand(4, aqua); SetBand(5, blue); SetBand(6, purple); SetBand(7, magenta);
+            Shader.SetGlobalVectorArray(ID_HSL, _hsl);
+
             if (postFxVolume == null)
             {
                 var sky = FindFirstObjectByType<StylizedSkyController>();

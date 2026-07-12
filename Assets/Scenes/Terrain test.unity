@@ -17,7 +17,7 @@ RenderSettings:
   m_Fog: 1
   m_FogColor: {r: 0.68, g: 0.76, b: 0.84, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.001
+  m_FogDensity: 0.0006
   m_LinearFogStart: 60
   m_LinearFogEnd: 900
   m_AmbientSkyColor: {r: 0.7446961, g: 0.7019873, b: 0.6625042, a: 0.77289236}
@@ -36195,13 +36195,45 @@ MonoBehaviour:
   highlightCompression: 0.35
   shadowLift: 0.03
   shadowLiftColor: {r: 0.85, g: 0.9, b: 1, a: 1}
-  bloomIntensity: 1.38
-  bloomThreshold: 1
-  bloomScatter: 0.55
-  bloomRadius: 1.9
+  bloomIntensity: 1.4
+  bloomThreshold: 0.75
+  bloomScatter: 0.7
+  bloomRadius: 1.8
   bloomTint: {r: 1, g: 0.85, b: 0.58, a: 1}
   bloomWarmth: 0.7
   bloomColorIsolation: 0.6
+  red:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  orange:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  yellow:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  green:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  aqua:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  blue:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  purple:
+    hue: 0
+    saturation: 0
+    luminance: 0
+  magenta:
+    hue: 0
+    saturation: 0
+    luminance: 0
   postFxVolume: {fileID: 1292236143}
 --- !u!4 &514679126
 Transform:
@@ -41864,7 +41896,7 @@ Transform:
   m_GameObject: {fileID: 614308857}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 5.1260533, z: 0}
+  m_LocalPosition: {x: 0, y: 3.1527085, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -143059,7 +143091,7 @@ MonoBehaviour:
   hdrBrightness: 9
   rimGlow: 0.5
   tintFromSunColor: 1
-  overrideColor: {r: 1, g: 0.94, b: 0.82, a: 1}
+  overrideColor: {r: 1, g: 0.87262213, b: 0.4584905, a: 1}
   saturation: 1
   horizonScatter: 0.8
   noonShrink: 0.55
@@ -175647,7 +175679,7 @@ MonoBehaviour:
   enableFog: 1
   fogColor: {r: 0.68, g: 0.76, b: 0.84, a: 1}
   mode: 3
-  density: 0.001
+  density: 0.0006
   linearStart: 60
   linearEnd: 900
 --- !u!4 &2091052255

@@ -96,6 +96,7 @@ namespace IslandSystem.Sun
                 var resourceData = frameData.Get<UniversalResourceData>();
                 var cameraData = frameData.Get<UniversalCameraData>();
                 if (cameraData.cameraType != CameraType.Game && cameraData.cameraType != CameraType.SceneView) return;
+                if (!cameraData.postProcessEnabled) return;   // skip bake / no-post cameras
                 if (!resourceData.cameraDepthTexture.IsValid()) return;
 
                 var cam = cameraData.camera;

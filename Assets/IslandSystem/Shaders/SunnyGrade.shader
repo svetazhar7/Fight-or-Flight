@@ -30,8 +30,30 @@ Shader "Hidden/IslandSystem/SunnyGrade"
         half4  _SG_CoolColor;  // cool shadow tint
         half4  _SG_LiftColor;  // shadow lift fill colour
         float4 _SG_Texel;      // x,y = 1/full-res size
+        float4 _SG_HSL[8];     // per Lightroom band: x hue shift, y saturation, z luminance (all -1..1)
+
+        // Hue centres of the 8 Lightroom bands (red..magenta) on the 0..1 wheel.
+        static const float SG_BandCenter[8] = { 0.0, 0.055, 0.15, 0.33, 0.5, 0.62, 0.75, 0.88 };
 
         float SG_Luma(half3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+
+        // Full RGB<->HSV (value may exceed 1 for HDR — hue/sat stay valid). Standard branchless form.
+        float3 SG_RGB2HSV(float3 c)
+        {
+            float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+            float4 p = lerp(float4(c.bg, K.wz), float4(c.gb, K.xy), step(c.b, c.g));
+            float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+            float d = q.x - min(q.w, q.y);
+            float e = 1.0e-10;
+            return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+        }
+        float3 SG_HSV2RGB(float3 c)
+        {
+            float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+            float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+            return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
+        }
+        float SG_HueDist(float a, float b) { float d = abs(a - b); return min(d, 1.0 - d); }
 
         // Hue in 0..1 (same wheel as Color.RGBToHSV) + saturation, scale-invariant so HDR intensity doesn't matter.
         float2 SG_HueSat(half3 c)
@@ -159,6 +181,26 @@ Shader "Hidden/IslandSystem/SunnyGrade"
                 // Warm-only saturation: juicy sunlit greens/yellows; cold hues keep their authored purity.
                 L = SG_Luma(c);
                 c = lerp(L.xxx, c, 1.0 + _SG_GradeA.w * warmth);
+
+                // Per-colour HSL (Lightroom-style): each of 8 hue bands shifts its own hue / saturation / luminance,
+                // hue-weighted so a band only touches its own colours (greens can be juiced without warming the sky).
+                {
+                    float3 hsv = SG_RGB2HSV(max(c, 0.0));
+                    float dh = 0.0, ds = 0.0, dl = 0.0;
+                    [unroll]
+                    for (int k = 0; k < 8; k++)
+                    {
+                        float w = saturate(1.0 - SG_HueDist(hsv.x, SG_BandCenter[k]) / 0.10);
+                        w *= w;
+                        dh += _SG_HSL[k].x * w;
+                        ds += _SG_HSL[k].y * w;
+                        dl += _SG_HSL[k].z * w;
+                    }
+                    hsv.x = frac(hsv.x + dh * 0.1);              // hue shift up to ~±36°
+                    hsv.y = saturate(hsv.y * (1.0 + ds));         // saturation ±100%
+                    hsv.z = max(0.0, hsv.z * (1.0 + dl * 0.5));   // luminance ±50%
+                    c = SG_HSV2RGB(hsv);
+                }
 
                 // Local contrast: unsharp mask on luma against a 4-tap cross blur — volume without harshness.
                 if (_SG_GradeC.x > 0.001)

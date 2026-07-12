@@ -104,6 +104,9 @@ namespace IslandSystem.Sun
                 var resourceData = frameData.Get<UniversalResourceData>();
                 var cameraData = frameData.Get<UniversalCameraData>();
                 if (cameraData.cameraType != CameraType.Game && cameraData.cameraType != CameraType.SceneView) return;
+                // Skip cameras with post-processing off — e.g. the impostor-atlas BAKE camera. Grading its LDR
+                // transparent-background cell render corrupts the baked atlas (black billboards).
+                if (!cameraData.postProcessEnabled) return;
 
                 var fullDesc = cameraData.cameraTargetDescriptor;
                 fullDesc.depthBufferBits = 0;
